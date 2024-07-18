@@ -2320,7 +2320,8 @@ int *TrianglePointsToSurface(PyMOLGlobals * G, float *v, float *vn, int n,
       I->map = MapNew(I->G, cutoff, v, n, extent);
       MapSetupExpress(I->map);
       map = I->map;
-      MapCacheInit(&I->map_cache, map, 0, 0);
+      if (ok)
+	ok &= MapCacheInit(&I->map_cache, map);
 
       if(G->Interrupt)
         ok = false;
@@ -2401,7 +2402,7 @@ int *TrianglePointsToSurface(PyMOLGlobals * G, float *v, float *vn, int n,
       FreeP(I->edgeStatus);
       FreeP(I->vertActive);
       FreeP(I->vertWeight);
-      MapCacheFree(&I->map_cache, 0, 0);
+      MapCacheFree(&I->map_cache);
       MapFree(map);
 
       result = I->tri;

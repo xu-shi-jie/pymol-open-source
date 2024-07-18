@@ -39,25 +39,19 @@ struct MapType {
   int NVert;
   int NEElem = 0;
   Vector3f Max, Min;
-  int group_id;
-  int block_base;
 
   ~MapType();
 };
 
-typedef struct {
+struct MapCache {
   PyMOLGlobals *G;
   int *Cache, *CacheLink, CacheStart;
-  int block_base;
-
-} MapCache;
+};
 
 #define MapBorder 2
 
 MapType *MapNew(PyMOLGlobals * G, float range, const float *vert, int nVert,
     const float* extent = nullptr);
-MapType *MapNewCached(PyMOLGlobals * G, float range, const float *vert, int nVert,
-                      const float *extent, int group_id, int block_id);
 
 using MapFlag_t = int;
 MapType *MapNewFlagged(PyMOLGlobals * G, float range, const float *vert, int nVert,
@@ -79,9 +73,9 @@ int *MapLocusEStart(MapType * map, const float *v);
 #define MapCache(m,a) {(m)->Cache[a]=1;(m)->CacheLink[a]=(m)->CacheStart;(m)->CacheStart=a;}
 #define MapCached(m,a) ((m)->Cache[a])
 
-int MapCacheInit(MapCache * M, MapType * I, int group_id, int block_base);
+int MapCacheInit(MapCache* M, MapType* I);
 void MapCacheReset(MapCache * M);
-void MapCacheFree(MapCache * M, int group_id, int block_base);
+void MapCacheFree(MapCache* M);
 
 float MapGetSeparation(PyMOLGlobals * G, float range, const float *mx, const float *mn,
                        float *diagonal);

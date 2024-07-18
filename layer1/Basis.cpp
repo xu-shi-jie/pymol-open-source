@@ -24,7 +24,6 @@ Z* -------------------------------------------------------------------
 #include"Err.h"
 #include"Feedback.h"
 #include"Util.h"
-#include"MemoryCache.h"
 #include"Character.h"
 
 static const float kR_SMALL4 = 0.0001F;
@@ -2814,10 +2813,8 @@ int BasisHitShadow(BasisCallRec * BC)
 }
 
 /*========================================================================*/
-int BasisMakeMap(CBasis * I, int *vert2prim, CPrimitive * prim, int n_prim,
-		 float *volume,
-		 int group_id, int block_base,
-		 int perspective, float front, float size_hint)
+int BasisMakeMap(CBasis* I, int* vert2prim, CPrimitive* prim, int n_prim,
+    float* volume, int perspective, float front, float size_hint)
 {
   float *v;
   float ll;
@@ -2995,11 +2992,10 @@ int BasisMakeMap(CBasis * I, int *vert2prim, CPrimitive * prim, int n_prim,
 
     extra_vert += I->NVertex;
     if (ok)
-      tempVertex =
-	CacheAlloc(I->G, float, extra_vert * 3, group_id, cCache_basis_tempVertex);
+      tempVertex = pymol::malloc<float>(extra_vert * 3);
     CHECKOK(ok, tempVertex);
     if (ok)
-      tempRef = CacheAlloc(I->G, int, extra_vert, group_id, cCache_basis_tempRef);
+      tempRef = pymol::malloc<int>(extra_vert);
     CHECKOK(ok, tempRef);
 
     ErrChkPtr(I->G, tempVertex);        /* can happen if extra vert is unreasonable */
@@ -3217,10 +3213,10 @@ int BasisMakeMap(CBasis * I, int *vert2prim, CPrimitive * prim, int n_prim,
 	  " BasisMakeMap: Extent [%8.2f %8.2f] [%8.2f %8.2f] [%8.2f %8.2f]\n",
 	  extent[0], extent[1], extent[2], extent[3], extent[4], extent[5]
 	  ENDFB(I->G);
-	I->Map = MapNewCached(I->G, -sep, tempVertex, n, extent, group_id, block_base);
+	I->Map = MapNew(I->G, -sep, tempVertex, n, extent);
 	CHECKOK(ok, I->Map);
       } else {
-	I->Map = MapNewCached(I->G, sep, tempVertex, n, nullptr, group_id, block_base);
+	I->Map = MapNew(I->G, sep, tempVertex, n, nullptr);
 	CHECKOK(ok, I->Map);
       }
     }
@@ -3527,28 +3523,21 @@ int BasisMakeMap(CBasis * I, int *vert2prim, CPrimitive * prim, int n_prim,
         }                       /* for e */
       }
       if(ehead != ehead_new) {
-        CacheFreeP(I->G, map->EHead, group_id, block_base + cCache_map_ehead_offset,
-                   false);
-        VLACacheFreeP(I->G, map->EList, group_id, block_base + cCache_map_elist_offset,
-                      false);
+        FreeP(map->EHead);
+        VLAFreeP(map->EList);
         map->EList = elist_new;
         map->EHead = ehead_new;
         map->NEElem = newelem;
-        MemoryCacheReplaceBlock(I->G, group_id, block_base + cCache_map_ehead_new_offset,
-                                block_base + cCache_map_ehead_offset);
-        MemoryCacheReplaceBlock(I->G, group_id, block_base + cCache_map_elist_new_offset,
-                                block_base + cCache_map_elist_offset);
-        VLACacheSize(G, map->EList, int, map->NEElem, group_id,
-                     block_base + cCache_map_elist_offset);
+        VLASize2<int>(map->EList, map->NEElem);
       }
     }
 
-    CacheFreeP(I->G, tempVertex, group_id, cCache_basis_tempVertex, false);
-    CacheFreeP(I->G, tempRef, group_id, cCache_basis_tempRef, false);
+    FreeP(tempVertex);
+    FreeP(tempRef);
 
   } else {
     /* simple sphere mode */
-    I->Map = MapNewCached(I->G, -sep, I->Vertex, I->NVertex, nullptr, group_id, block_base);
+    I->Map = MapNew(I->G, -sep, I->Vertex, I->NVertex, nullptr);
     CHECKOK(ok, I->Map);
     if (ok){
       if(perspective) {
@@ -3563,7 +3552,7 @@ int BasisMakeMap(CBasis * I, int *vert2prim, CPrimitive * prim, int n_prim,
 
 
 /*========================================================================*/
-int BasisInit(PyMOLGlobals * G, CBasis * I, int group_id)
+int BasisInit(PyMOLGlobals * G, CBasis * I)
 {
   int ok = true;
   I->G = G;
@@ -3572,22 +3561,22 @@ int BasisInit(PyMOLGlobals * G, CBasis * I, int group_id)
   I->Normal = nullptr;
   I->Vert2Normal = nullptr;
   I->Precomp = nullptr;
-  I->Vertex = VLACacheAlloc(I->G, float, 1, group_id, cCache_basis_vertex);
+  I->Vertex = VLAlloc(float, 1);
   CHECKOK(ok, I->Vertex);
   if (ok)
-    I->Radius = VLACacheAlloc(I->G, float, 1, group_id, cCache_basis_radius);
+    I->Radius = VLAlloc(float, 1);
   CHECKOK(ok, I->Radius);
   if (ok)
-    I->Radius2 = VLACacheAlloc(I->G, float, 1, group_id, cCache_basis_radius2);
+    I->Radius2 = VLAlloc(float, 1);
   CHECKOK(ok, I->Radius2);
   if (ok)
-    I->Normal = VLACacheAlloc(I->G, float, 1, group_id, cCache_basis_normal);
+    I->Normal = VLAlloc(float, 1);
   CHECKOK(ok, I->Normal);
   if (ok)
-    I->Vert2Normal = VLACacheAlloc(I->G, int, 1, group_id, cCache_basis_vert2normal);
+    I->Vert2Normal = VLAlloc(int, 1);
   CHECKOK(ok, I->Vert2Normal);
   if (ok)
-    I->Precomp = VLACacheAlloc(I->G, float, 1, group_id, cCache_basis_precomp);
+    I->Precomp = VLAlloc(float, 1);
   CHECKOK(ok, I->Precomp);
   I->Map = nullptr;
   I->NVertex = 0;
@@ -3597,18 +3586,18 @@ int BasisInit(PyMOLGlobals * G, CBasis * I, int group_id)
 
 
 /*========================================================================*/
-void BasisFinish(CBasis * I, int group_id)
+void BasisFinish(CBasis * I)
 {
   if(I->Map) {
     MapFree(I->Map);
     I->Map = nullptr;
   }
-  VLACacheFreeP(I->G, I->Radius2, group_id, cCache_basis_radius2, false);
-  VLACacheFreeP(I->G, I->Radius, group_id, cCache_basis_radius, false);
-  VLACacheFreeP(I->G, I->Vertex, group_id, cCache_basis_vertex, false);
-  VLACacheFreeP(I->G, I->Vert2Normal, group_id, cCache_basis_vert2normal, false);
-  VLACacheFreeP(I->G, I->Normal, group_id, cCache_basis_normal, false);
-  VLACacheFreeP(I->G, I->Precomp, group_id, cCache_basis_precomp, false);
+  VLAFreeP(I->Radius2);
+  VLAFreeP(I->Radius);
+  VLAFreeP(I->Vertex);
+  VLAFreeP(I->Vert2Normal);
+  VLAFreeP(I->Normal);
+  VLAFreeP(I->Precomp);
   I->Vertex = nullptr;
 }
 

@@ -23,13 +23,12 @@ Z* ------------------------------------------------------------------- */
 #include"Map.h"
 #include"Setting.h"
 #include"Feedback.h"
-#include"MemoryCache.h"
 #include"Base.h"
 
 #include "pymol/algorithm.h"
 
-static MapType *_MapNew(PyMOLGlobals * G, float range, const float *vert, int nVert,
-                        const float *extent, const int *flag, int group_id, int block_id);
+static MapType* _MapNew(PyMOLGlobals* G, float range, const float* vert,
+    int nVert, const float* extent, const int* flag);
 
 float MapGetDiv(MapType * I)
 {
@@ -40,36 +39,27 @@ MapType::~MapType()
 {
   auto I = this;
   {
-    CacheFreeP(I->G, I->Head, I->group_id, I->block_base + cCache_map_head_offset, false);
-    CacheFreeP(I->G, I->Link, I->group_id, I->block_base + cCache_map_link_offset, false);
-    CacheFreeP(I->G, I->EHead, I->group_id, I->block_base + cCache_map_ehead_offset,
-               false);
-    CacheFreeP(I->G, I->EMask, I->group_id, I->block_base + cCache_map_emask_offset,
-               false);
-    VLACacheFreeP(I->G, I->EList, I->group_id, I->block_base + cCache_map_elist_offset,
-                  false);
+    FreeP(I->Head)
+    FreeP(I->Link);
+    FreeP(I->EHead);
+    FreeP(I->EMask);
+    VLAFreeP(I->EList);
   }
 }
 
-int MapCacheInit(MapCache * M, MapType * I, int group_id, int block_base)
+int MapCacheInit(MapCache* M, MapType* I)
 {
   PyMOLGlobals *G = I->G;
   int ok = true;
 
   M->G = G;
-  M->block_base = I->block_base;
-  M->Cache =
-    CacheCalloc(G, int, I->NVert, group_id, block_base + cCache_map_cache_offset);
+  M->Cache = pymol::calloc<int>(I->NVert);
   CHECKOK(ok, M->Cache);
   if (ok)
-    M->CacheLink =
-      CacheAlloc(G, int, I->NVert, group_id, block_base + cCache_map_cache_link_offset);
+    M->CacheLink = pymol::malloc<int>(I->NVert);
   CHECKOK(ok, M->CacheLink);
   M->CacheStart = -1;
   return ok;
-  /*  p=M->Cache;
-     for(a=0;a<I->NVert;a++)
-     *(p++) = 0; */
 }
 
 void MapCacheReset(MapCache * M)
@@ -105,11 +95,10 @@ void MapCacheReset(MapCache * M)
   M->CacheStart = -1;
 }
 
-void MapCacheFree(MapCache * M, int group_id, int block_base)
+void MapCacheFree(MapCache* M)
 {
-  CacheFreeP(M->G, M->Cache, group_id, block_base + cCache_map_cache_offset, false);
-  CacheFreeP(M->G, M->CacheLink, group_id, block_base + cCache_map_cache_link_offset,
-             false);
+  FreeP(M->Cache);
+  FreeP(M->CacheLink);
 }
 
 #define MapSafety 0.01F
@@ -178,16 +167,13 @@ int MapSetupExpressXY(MapType * I, int n_vert, int negative_start)
     " MapSetupExpressXY-Debug: entered.\n" ENDFD;
 
   mapSize = I->Dim[0] * I->Dim[1] * I->Dim[2];
-  I->EHead =
-    CacheCalloc(G, int, mapSize, I->group_id, I->block_base + cCache_map_ehead_offset);
+  I->EHead = pymol::calloc<int>(mapSize);
   CHECKOK(ok, I->EHead);
   if (ok)
-    I->EList = (int*) VLACacheMalloc(G, n_alloc, sizeof(int), ELIST_GROW_FACTOR, 0,
-			      I->group_id, I->block_base + cCache_map_elist_offset);
+    I->EList = (int*) VLAMalloc(n_alloc, sizeof(int), ELIST_GROW_FACTOR, 0);
   CHECKOK(ok, I->EList);
   if (ok)
-    I->EMask = CacheCalloc(G, int, I->Dim[0] * I->Dim[1],
-			   I->group_id, I->block_base + cCache_map_emask_offset);
+    I->EMask = pymol::calloc<int>(I->Dim[0] * I->Dim[1]);
   CHECKOK(ok, I->EMask);
 
   n = 1;
@@ -212,8 +198,7 @@ int MapSetupExpressXY(MapType * I, int n_vert, int negative_start)
               flag = true;
               while(i >= 0) {
 
-                VLACacheCheck(G, I->EList, int, n, I->group_id,
-                              I->block_base + cCache_map_elist_offset);
+                VLACheck2<int>(I->EList, n);
 		CHECKOK(ok, I->EList);
                 I->EList[n] = i;
                 n++;
@@ -230,8 +215,7 @@ int MapSetupExpressXY(MapType * I, int n_vert, int negative_start)
         if(ok && flag) {
           *(I->EMask + I->Dim[1] * a + b) = true;
           *(MapEStart(I, a, b, c)) = negative_start ? -st : st;
-          VLACacheCheck(G, I->EList, int, n, I->group_id,
-                        I->block_base + cCache_map_elist_offset);
+          VLACheck2<int>(I->EList, n);
 	  CHECKOK(ok, I->EList);
           I->EList[n] = -1;
           n++;
@@ -245,8 +229,7 @@ int MapSetupExpressXY(MapType * I, int n_vert, int negative_start)
 
   if (ok){
     I->NEElem = n;
-    VLACacheSize(G, I->EList, int, I->NEElem, I->group_id,
-		 I->block_base + cCache_map_elist_offset);
+    VLASize2<int>(I->EList, I->NEElem);
     CHECKOK(ok, I->EList);
   }
   PRINTFD(G, FB_Map)
@@ -269,15 +252,13 @@ int MapSetupExpressXYVert(MapType * I, float *vert, int n_vert, int negative_sta
     negative_start ENDFD;
 
   /*mapSize        = I->Dim[0]*I->Dim[1]*I->Dim[2]; */
-  I->EHead = CacheCalloc(G, int, I->Dim[0] * I->Dim[1] * I->Dim[2],
-                         I->group_id, I->block_base + cCache_map_ehead_offset);
+  I->EHead = pymol::calloc<int>(I->Dim[0] * I->Dim[1] * I->Dim[2]);
   CHECKOK(ok, I->EHead);
   if (ok)
-    I->EMask = CacheCalloc(G, int, I->Dim[0] * I->Dim[1],
-			   I->group_id, I->block_base + cCache_map_emask_offset);
+    I->EMask = pymol::calloc<int>(I->Dim[0] * I->Dim[1]);
   CHECKOK(ok, I->EMask);
   if (ok)
-    I->EList = (int*) VLACacheMalloc(G, n_alloc, sizeof(int), ELIST_GROW_FACTOR, 0, I->group_id, I->block_base + cCache_map_elist_offset);       /* autozero */
+    I->EList = (int*) VLAMalloc(n_alloc, sizeof(int), ELIST_GROW_FACTOR, 0); /* autozero */
   CHECKOK(ok, I->EList);  
 
   n = 1;
@@ -312,8 +293,7 @@ int MapSetupExpressXYVert(MapType * I, float *vert, int n_vert, int negative_sta
                 if(i > -1) {
                   flag = true;
                   while(ok && i > -1) {
-                    VLACacheCheck(G, I->EList, int, n, I->group_id,
-                                  I->block_base + cCache_map_elist_offset);
+                    VLACheck2<int>(I->EList, n);
 		    CHECKOK(ok, I->EList);
                     I->EList[n] = i;
                     n++;
@@ -330,8 +310,7 @@ int MapSetupExpressXYVert(MapType * I, float *vert, int n_vert, int negative_sta
           if(flag) {
             *(I->EMask + I->Dim[1] * a + b) = true;
             *(MapEStart(I, a, b, c)) = negative_start ? -st : st;
-            VLACacheCheck(G, I->EList, int, n, I->group_id,
-                          I->block_base + cCache_map_elist_offset);
+            VLACheck2<int>(I->EList, n);
 	    CHECKOK(ok, I->EList);
             I->EList[n] = -1;
             n++;
@@ -353,8 +332,7 @@ int MapSetupExpressXYVert(MapType * I, float *vert, int n_vert, int negative_sta
 
   if (ok){
     I->NEElem = n;
-    VLACacheSize(G, I->EList, int, I->NEElem, I->group_id,
-		 I->block_base + cCache_map_elist_offset);
+    VLASize2<int>(I->EList, I->NEElem);
     CHECKOK(ok, I->EList);
   }
   PRINTFD(G, FB_Map)
@@ -389,16 +367,13 @@ int MapSetupExpressPerp(MapType * I, const float *vert, float front, int nVertHi
     " MapSetupExpress-Debug: entered.\n" ENDFD;
 
   mapSize = I->Dim[0] * I->Dim[1] * I->Dim[2];
-  I->EHead = CacheCalloc(G, int, mapSize,
-                         I->group_id, I->block_base + cCache_map_ehead_offset);
+  I->EHead = pymol::calloc<int>(mapSize);
   CHECKOK(ok, I->EHead);
   if (ok)
-    I->EList = (int*) VLACacheMalloc(G, n_alloc, sizeof(int), ELIST_GROW_FACTOR, 0,
-			      I->group_id, I->block_base + cCache_map_elist_offset);
+    I->EList = (int*) VLAMalloc(n_alloc, sizeof(int), ELIST_GROW_FACTOR, 0);
   CHECKOK(ok, I->EList);
   if (ok)
-    I->EMask = CacheCalloc(G, int, I->Dim[0] * I->Dim[1],
-			   I->group_id, I->block_base + cCache_map_emask_offset);
+    I->EMask = pymol::calloc<int>(I->Dim[0] * I->Dim[1]);
   CHECKOK(ok, I->EMask);
 
   emask = I->EMask;
@@ -473,8 +448,7 @@ int MapSetupExpressPerp(MapType * I, const float *vert, float front, int nVertHi
                   while(ok && i >= 0) {
                     if((!spanner) || (f == c) || spanner[i]) {
                       /* for non-voxel-spanners, only spread in the XY plane (memory use ~ 9X instead of 27X -- a big difference!) */
-                      VLACacheCheck(G, I->EList, int, n, I->group_id,
-                                    I->block_base + cCache_map_elist_offset);
+                      VLACheck2<int>(I->EList, n);
 		      CHECKOK(ok, I->EList);
                       I->EList[n] = i;
                       n++;
@@ -489,8 +463,7 @@ int MapSetupExpressPerp(MapType * I, const float *vert, float front, int nVertHi
           }
           if(ok && flag) {
             *(MapEStart(I, a, b, c)) = negative_start ? -st : st;
-            VLACacheCheck(G, I->EList, int, n, I->group_id,
-                          I->block_base + cCache_map_elist_offset);
+            VLACheck2<int>(I->EList, n);
 	    CHECKOK(ok, I->EList);
             I->EList[n] = -1;
             n++;
@@ -501,8 +474,7 @@ int MapSetupExpressPerp(MapType * I, const float *vert, float front, int nVertHi
     " MapSetupExpressPerp: %d rows in express table \n", n ENDFB(G);
   if (ok){
     I->NEElem = n;
-    VLACacheSize(G, I->EList, int, I->NEElem, I->group_id,
-		 I->block_base + cCache_map_elist_offset);
+    VLASize2<int>(I->EList, I->NEElem);
     CHECKOK(ok, I->EList);
   }
   PRINTFD(G, FB_Map)
@@ -528,11 +500,10 @@ int MapSetupExpress(MapType * I)
     " MapSetupExpress-Debug: entered.\n" ENDFD;
 
   mapSize = I->Dim[0] * I->Dim[1] * I->Dim[2];
-  I->EHead =
-    CacheCalloc(G, int, mapSize, group_id, I->block_base + cCache_map_ehead_offset);
+  I->EHead = pymol::calloc<int>(mapSize);
   CHECKOK(ok, I->EHead);
   if (ok)
-    e_list = (int*) VLACacheMalloc(G, 1000, sizeof(int), 5, 0, group_id, block_offset);
+    e_list = (int*) VLAMalloc(1000, sizeof(int), 5, 0);
   CHECKOK(ok, e_list);
 
   n = 1;
@@ -558,7 +529,7 @@ int MapSetupExpress(MapType * I)
               if((i = *(i_ptr5++)) >= 0) {
                 flag = true;
                 do {
-                  VLACacheCheck(G, e_list, int, n, group_id, block_offset);
+                  VLACheck2<int>(e_list, n);
 		  CHECKOK(ok, e_list);
 		  if (ok)
 		    e_list[n++] = i;
@@ -576,7 +547,7 @@ int MapSetupExpress(MapType * I)
 	if (ok){
 	  if(flag) {
 	    *(MapEStart(I, a, b, c)) = st;
-	    VLACacheCheck(G, e_list, int, n, group_id, block_offset);
+	    VLACheck2<int>(e_list, n);
 	    CHECKOK(ok, e_list);
 	    e_list[n] = -1;
 	    n++;
@@ -590,7 +561,7 @@ int MapSetupExpress(MapType * I)
   if (ok){
     I->EList = e_list;
     I->NEElem = n;
-    VLACacheSize(G, I->EList, int, I->NEElem, group_id, block_offset);
+    VLASize2<int>(I->EList, I->NEElem);
     CHECKOK(ok, I->EList);
   }
   PRINTFD(G, FB_Map)
@@ -742,25 +713,20 @@ float MapGetSeparation(PyMOLGlobals * G, float range, const float *mx, const flo
   return (divSize);
 }
 
-MapType *MapNew(PyMOLGlobals * G, float range, const float *vert, int nVert, const float *extent)
+MapType* MapNew(PyMOLGlobals* G, float range, const float* vert, int nVert,
+    const float* extent)
 {
-  return (_MapNew(G, range, vert, nVert, extent, nullptr, -1, 0));
-}
-
-MapType *MapNewCached(PyMOLGlobals * G, float range, const float *vert, int nVert,
-                      const float *extent, int group_id, int block_id)
-{
-  return (_MapNew(G, range, vert, nVert, extent, nullptr, group_id, block_id));
+  return _MapNew(G, range, vert, nVert, extent, nullptr);
 }
 
 MapType *MapNewFlagged(PyMOLGlobals * G, float range, const float *vert, int nVert,
                        const float *extent, const int *flag)
 {
-  return (_MapNew(G, range, vert, nVert, extent, flag, -1, 0));
+  return _MapNew(G, range, vert, nVert, extent, flag);
 }
 
 static MapType *_MapNew(PyMOLGlobals * G, float range, const float *vert, int nVert,
-                        const float *extent, const int *flag, int group_id, int block_base)
+                        const float *extent, const int *flag)
 {
   int a, c;
   int mapSize;
@@ -780,11 +746,9 @@ static MapType *_MapNew(PyMOLGlobals * G, float range, const float *vert, int nV
   }
   /* Initialize */
   I->G = G;
-  I->group_id = group_id;
-  I->block_base = block_base;
 
   /* initialize an empty cache for the map */
-  I->Link = CacheAlloc(G, int, nVert, group_id, block_base + cCache_map_link_offset);
+  I->Link = pymol::malloc<int>(nVert);
   CHECKOK(ok, I->Link);
   if (!ok){
     MapFree(I);
@@ -928,7 +892,7 @@ static MapType *_MapNew(PyMOLGlobals * G, float range, const float *vert, int nV
 
   /* compute size and allocate */
   mapSize = I->Dim[0] * I->Dim[1] * I->Dim[2];
-  I->Head = CacheAlloc(G, int, mapSize, group_id, block_base + cCache_map_head_offset);
+  I->Head = pymol::malloc<int>(mapSize);
   CHECKOK(ok, I->Head);
   if (!ok){
     MapFree(I);
