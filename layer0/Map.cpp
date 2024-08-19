@@ -728,7 +728,6 @@ MapType *MapNewFlagged(PyMOLGlobals * G, float range, const float *vert, int nVe
 static MapType *_MapNew(PyMOLGlobals * G, float range, const float *vert, int nVert,
                         const float *extent, const int *flag)
 {
-  int a, c;
   int mapSize;
   int h, k, l;
   int *list;
@@ -747,6 +746,16 @@ static MapType *_MapNew(PyMOLGlobals * G, float range, const float *vert, int nV
   /* Initialize */
   I->G = G;
 
+  // empirical limit to avoid crash in PYMOL-3002
+  const float SANITY_LIMIT = 1e10;
+
+  // Insane vertices are ignored in Maps now.
+  auto is_sane = [SANITY_LIMIT](const float* vert) {
+    return vert[0] > -SANITY_LIMIT && vert[0] < SANITY_LIMIT &&
+           vert[1] > -SANITY_LIMIT && vert[1] < SANITY_LIMIT &&
+           vert[2] > -SANITY_LIMIT && vert[2] < SANITY_LIMIT;
+  };
+
   /* initialize an empty cache for the map */
   I->Link = pymol::malloc<int>(nVert);
   CHECKOK(ok, I->Link);
@@ -754,7 +763,7 @@ static MapType *_MapNew(PyMOLGlobals * G, float range, const float *vert, int nV
     MapFree(I);
     return nullptr;
   }
-  for(a = 0; a < nVert; a++)
+  for (int a = 0; a < nVert; a++)
     I->Link[a] = -1;
 
   /* map extents; set if valid, otherwise determine based on the flagged vertices */
@@ -779,23 +788,28 @@ static MapType *_MapNew(PyMOLGlobals * G, float range, const float *vert, int nV
     if(flag) {
       firstFlag = true;
       v = vert;
-      for(a = 0; a < nVert; a++) {
+      for (int a = 0; a < nVert; a++) {
 	/* if we consider this vertex */
         if(flag[a]) {
 	  /* first-time setup*/
           if(firstFlag) {
-            for(c = 0; c < 3; c++) {
-              I->Min[c] = v[c];
-              I->Max[c] = v[c];
+            for (int vertIdx = 0; vertIdx < nVert; vertIdx++) {
+              if (is_sane(v)) {
+                std::copy_n(v, 3, I->Min);
+                std::copy_n(v, 3, I->Max);
+                break;
+              }
             }
             firstFlag = false;
           } else {
 	    /* min/max extents, over all vertices */
-            for(c = 0; c < 3; c++) {
-              if(I->Min[c] > v[c])
-                I->Min[c] = v[c];
-              if(I->Max[c] < v[c])
-                I->Max[c] = v[c];
+            for (int c = 0; c < 3; c++) {
+              if (is_sane(v)) {
+                if(I->Min[c] > v[c])
+                  I->Min[c] = v[c];
+                if(I->Max[c] < v[c])
+                  I->Max[c] = v[c];
+              }
             }
           }
         }
@@ -805,17 +819,25 @@ static MapType *_MapNew(PyMOLGlobals * G, float range, const float *vert, int nV
       /* no flag: do all vertices in the list */
       if(nVert) {
         v = vert;
-        for(c = 0; c < 3; c++) {
-          I->Min[c] = v[c];
-          I->Max[c] = v[c];
+        int a = 0;
+
+        while (a++ < nVert) {
+          if (is_sane(v)) {
+            std::copy_n(v, 3, I->Min);
+            std::copy_n(v, 3, I->Max);
+            break;
+          }
         }
-        v += 3;
-        for(a = 1; a < nVert; a++) {
-          for(c = 0; c < 3; c++) {
-            if(I->Min[c] > v[c])
-              I->Min[c] = v[c];
-            if(I->Max[c] < v[c])
-              I->Max[c] = v[c];
+
+        v += a * 3;
+        for (a = 1; a < nVert; a++) {
+          for (int c = 0; c < 3; c++) {
+            if (is_sane(v)) {
+              if(I->Min[c] > v[c])
+                I->Min[c] = v[c];
+              if(I->Max[c] < v[c])
+                I->Max[c] = v[c];
+            }
           }
           v += 3;
         }
@@ -824,13 +846,11 @@ static MapType *_MapNew(PyMOLGlobals * G, float range, const float *vert, int nV
   }
 
   /* sanity check */
-  for(a = 0; a < 3; a++) {
+  for (int a = 0; a < 3; a++) {
     if(I->Min[a] > I->Max[a]) {
       std::swap(I->Max[a], I->Min[a]);
     }
 
-    // empirical limit to avoid crash in PYMOL-3002
-    const float SANITY_LIMIT = 1e10;
     if(I->Min[a] < -SANITY_LIMIT) {
       PRINTFB(G, FB_Map, FB_Warnings)
         " %s-Warning: clamping Min %e -> %e\n", __FUNCTION__,
@@ -850,14 +870,14 @@ static MapType *_MapNew(PyMOLGlobals * G, float range, const float *vert, int nV
            I->Min[0], I->Min[1], I->Min[2], I->Max[0], I->Max[1], I->Max[2]);
   }
   /* interesting */
-  for(c = 0; c < 3; c++) {
+  for (int c = 0; c < 3; c++) {
     I->Min[c] -= MapSafety;
     I->Max[c] += MapSafety;
   }
   /* pad the boundaries by "range" */
   if(range < 0.0) {             /* negative range is a flag to expand edges using "range". */
     range = -range;
-    for(c = 0; c < 3; c++) {
+    for (int c = 0; c < 3; c++) {
       I->Min[c] -= range;
       I->Max[c] += range;
     }
@@ -915,7 +935,7 @@ static MapType *_MapNew(PyMOLGlobals * G, float range, const float *vert, int nV
   /* create 3-D hash of the vertices */
   if(flag) {
     v = vert;
-    for(a = 0; a < nVert; a++) {
+    for (int a = 0; a < nVert; a++) {
       if(flag[a])
         if(MapExclLocus(I, v, &h, &k, &l)) {
           list = MapFirst(I, h, k, l);
@@ -926,7 +946,7 @@ static MapType *_MapNew(PyMOLGlobals * G, float range, const float *vert, int nV
     }
   } else {
     v = vert;
-    for(a = 0; a < nVert; a++) {
+    for (int a = 0; a < nVert; a++) {
       if(MapExclLocus(I, v, &h, &k, &l)) {
         list = MapFirst(I, h, k, l);
         /*        printf("LINK %d %d %d %d %5.2f %5.2f %5.2f\n",a,h,k,l,v[0],v[1],v[2]); */
