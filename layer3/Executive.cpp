@@ -14191,7 +14191,7 @@ void ExecutiveSymExp(PyMOLGlobals * G, const char *name,
   }
 
   auto map =
-      std::unique_ptr<MapType>(MapNew(G, -cutoff, vv1.data(), op.nvv1, nullptr));
+      std::unique_ptr<MapType>(new MapType(G, -cutoff, vv1.data(), op.nvv1, nullptr));
   if (!map) {
     ErrMessage(G, __func__, "map is nullptr");
     return;

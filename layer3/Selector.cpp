@@ -919,7 +919,7 @@ int SelectorResidueVLAsTo3DMatchScores(PyMOLGlobals * G, CMatch * match,
         }
       }
       {
-        std::unique_ptr<MapType> map(MapNew(G, radius, v_ca, n, nullptr));
+        std::unique_ptr<MapType> map(new MapType(G, radius, v_ca, n, nullptr));
         if(!pass) {
           inter = inter1;
         } else {
@@ -1409,7 +1409,7 @@ MapType *SelectorGetSpacialMapFromSeleCoord(PyMOLGlobals * G, int sele, int stat
           }
         }
         if(nc) {
-          result = MapNew(G, cutoff, coord, nc, nullptr);
+          result = new MapType(G, cutoff, coord, nc, nullptr);
         }
       }
     }
@@ -1948,7 +1948,7 @@ int SelectorAssignSS(PyMOLGlobals * G, int target, int present,
 
       if(n1) {
         short too_many_atoms = false;
-        std::unique_ptr<MapType> map(MapNewFlagged(G, -cutoff,
+        std::unique_ptr<MapType> map(new MapType(G, -cutoff,
             pymol::flatten(coords), table_size, nullptr, Flag1.data()));
         if(map) {
 
@@ -4702,7 +4702,7 @@ std::vector<int> SelectorGetInterstateVector(
     return {};
   }
 
-  std::unique_ptr<MapType> map(MapNewFlagged(
+  std::unique_ptr<MapType> map(new MapType(
       G, -cutoff, pymol::flatten(coords), table_size, nullptr, flags.data()));
 
   if (!map) {
@@ -4782,7 +4782,7 @@ int SelectorMapMaskVDW(PyMOLGlobals * G, int sele1, ObjectMapState * oMap, float
   /* now create and apply voxel map */
   c = 0;
   if(n1) {
-    std::unique_ptr<MapType> map(MapNewFlagged(G, -(buffer + MAX_VDW),
+    std::unique_ptr<MapType> map(new MapType(G, -(buffer + MAX_VDW),
         pymol::flatten(coords), table_size, nullptr, Flag1.data()));
     if(map) {
       for(a = oMap->Min[0]; a <= oMap->Max[0]; a++) {
@@ -5228,7 +5228,7 @@ int SelectorMapGaussian(PyMOLGlobals * G, int sele1, ObjectMapState * oMap,
   c = 0;
   if(n1) {
     n2 = 0;
-    std::unique_ptr<MapType> map(MapNew(G, -max_rcut, point, n1, nullptr));
+    std::unique_ptr<MapType> map(new MapType(G, -max_rcut, point, n1, nullptr));
     if(map) {
       sum = 0.0;
       sumsq = 0.0;
@@ -5471,7 +5471,7 @@ int SelectorMapCoulomb(PyMOLGlobals * G, int sele1, ObjectMapState * oMap,
       }
 
       std::unique_ptr<MapType> map(
-          MapNew(G, -(cutoff), point, n_point, nullptr));
+          new MapType(G, -(cutoff), point, n_point, nullptr));
       if(map) {
         float dx, dy, dz;
         float cut = cutoff;
@@ -7298,7 +7298,7 @@ static int SelectorModulate1(PyMOLGlobals * G, EvalElem * base, int state)
             }
           }
           if(n1) {
-            std::unique_ptr<MapType> map(MapNewFlagged(G, -dist,
+            std::unique_ptr<MapType> map(new MapType(G, -dist,
                 pymol::flatten(coords), table_size, nullptr, Flag1.data()));
 	    CHECKOK(ok, map);
             if(ok) {
@@ -7398,7 +7398,7 @@ static int SelectorModulate1(PyMOLGlobals * G, EvalElem * base, int state)
             }
           }
           if(n1) {
-            std::unique_ptr<MapType> map(MapNewFlagged(G, -(dist + 2 * MAX_VDW),
+            std::unique_ptr<MapType> map(new MapType(G, -(dist + 2 * MAX_VDW),
                 Vertex.data(), I->Table.size(), nullptr, Flag1.data()));
 	    CHECKOK(ok, map);
             if(ok) {
@@ -9147,7 +9147,7 @@ static int SelectorLogic1(PyMOLGlobals * G, EvalElem * inp_base, int state)
             }
           }
           if(n1) {
-            std::unique_ptr<MapType> map(MapNewFlagged(G, -1.1, Vertex.data(),
+            std::unique_ptr<MapType> map(new MapType(G, -1.1, Vertex.data(),
                 I->Table.size(), nullptr, Flag1.data()));
             if(map) {
               int e, nCSet;
@@ -9428,7 +9428,7 @@ int SelectorOperator22(PyMOLGlobals * G, EvalElem * base, int state)
             }
           }
           if(n1) {
-            std::unique_ptr<MapType> map(MapNewFlagged(G, -dist,
+            std::unique_ptr<MapType> map(new MapType(G, -dist,
                 pymol::flatten(coords), table_size, nullptr, Flag1.data()));
 	    CHECKOK(ok, map);
             if(ok) {

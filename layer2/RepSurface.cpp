@@ -2525,7 +2525,7 @@ Rep* RepSurface::recolor()
 
     if (inclInvis) {
       float probe_radiusX2 = probe_radius * 2;
-      map = MapNewFlagged(G, 2 * I->max_vdw + probe_radius, cs->Coord,
+      map = new MapType(G, 2 * I->max_vdw + probe_radius, cs->Coord,
           cs->NIndex, nullptr, present);
       MapSetupExpress(map);
       /* add in nearby invisibles */
@@ -2535,7 +2535,7 @@ Rep* RepSurface::recolor()
           if ((!cullByFlag) || !(ai1->flags & cAtomFlag_ignore)) {
             v0 = cs->coordPtr(a);
             i = *(MapLocusEStart(map, v0));
-            if (i && map->EList) {
+            if (i && !map->EList.empty()) {
               j = map->EList[i++];
               while (j >= 0) {
                 if (present[j] > 1) {
@@ -2590,9 +2590,9 @@ Rep* RepSurface::recolor()
 
       if (vertex_map) {
         ambient_occlusion_map =
-            MapNewFlagged(G, map_cutoff, I->V, I->N, nullptr, nullptr);
+            new MapType(G, map_cutoff, I->V, I->N, nullptr, nullptr);
       } else {
-        ambient_occlusion_map = MapNewFlagged(
+        ambient_occlusion_map = new MapType(
             G, map_cutoff, cs->Coord, cs->NIndex, nullptr, present);
       }
       MapSetupExpress(ambient_occlusion_map);
@@ -2619,7 +2619,7 @@ Rep* RepSurface::recolor()
           add3f(v0, v0mod, v0mod);
 
           i = *(MapLocusEStart(ambient_occlusion_map, v0));
-          if (i && map->EList) {
+          if (i && !map->EList.empty()) {
             j = ambient_occlusion_map->EList[i++];
             while (j >= 0) {
               subtract3f(cs->coordPtr(j), v0, d);
@@ -2703,7 +2703,7 @@ Rep* RepSurface::recolor()
           mult3f(vn0, .01f, v0mod);
           add3f(v0, v0mod, v0mod);
           i = *(MapLocusEStart(ambient_occlusion_map, v0));
-          if (i && ambient_occlusion_map->EList) {
+          if (i && !ambient_occlusion_map->EList.empty()) {
             j = ambient_occlusion_map->EList[i++];
             maxDistA = 0.f;
             has = 0;
@@ -2841,7 +2841,7 @@ Rep* RepSurface::recolor()
     }; // update_VAO
 
     /* now, assign colors to each point */
-    map = MapNewFlagged(G, cutoff, cs->Coord, cs->NIndex, nullptr, present);
+    map = new MapType(G, cutoff, cs->Coord, cs->NIndex, nullptr, present);
     if (map) {
       short color_smoothing =
           SettingGetGlobal_i(G, cSetting_surface_color_smoothing);
@@ -2867,7 +2867,7 @@ Rep* RepSurface::recolor()
         auto vi = I->Vis + a;
         /* colors */
         i = *(MapLocusEStart(map, v0));
-        if (i && map->EList) {
+        if (i && !map->EList.empty()) {
           j = map->EList[i++];
           while (j >= 0) {
             atm = cs->IdxToAtm[j];
@@ -2951,7 +2951,7 @@ Rep* RepSurface::recolor()
           if (carve_map) {
 
             i = *(MapLocusEStart(carve_map, v0));
-            if (i && carve_map->EList) {
+            if (i && !carve_map->EList.empty()) {
               j = carve_map->EList[i++];
               while (j >= 0) {
                 float* v_targ = carve_vla + 3 * j;
@@ -2976,7 +2976,7 @@ Rep* RepSurface::recolor()
         if (clear_flag && (*vi)) { /* is point visible, and are we clearing? */
           if (clear_map) {
             i = *(MapLocusEStart(clear_map, v0));
-            if (i && clear_map->EList) {
+            if (i && !clear_map->EList.empty()) {
               j = clear_map->EList[i++];
               while (j >= 0) {
                 if (within3f(clear_vla + 3 * j, v0, clear_cutoff)) {
@@ -3299,7 +3299,7 @@ static int SurfaceJobEliminateCloseDotsType3orMore(
       dot_flag[a] = 1;
   }
   {
-    MapType* map = MapNew(G, point_sep + 0.05F, I->V, I->N, nullptr);
+    MapType* map = new MapType(G, point_sep + 0.05F, I->V, I->N, nullptr);
     int a;
     float* v = I->V;
     float* vn = I->VN;
@@ -3310,7 +3310,7 @@ static int SurfaceJobEliminateCloseDotsType3orMore(
     for (a = 0; ok && a < I->N; a++) {
       if (dot_flag[a]) {
         int i = *(MapLocusEStart(map, v));
-        if (i && map->EList) {
+        if (i && !map->EList.empty()) {
           int j = map->EList[i++];
           jj = I->N;
           nearest = point_sep + 1.0F;
@@ -3359,7 +3359,7 @@ static int SurfaceJobEliminateCloseDotsTypeLessThan3(
   int ok = true;
   int a;
   float point_sep = I->pointSep;
-  MapType* map = MapNew(G, -point_sep, I->V, I->N, nullptr);
+  MapType* map = new MapType(G, -point_sep, I->V, I->N, nullptr);
   float* v = I->V;
   float* vn = I->VN;
 
@@ -3372,7 +3372,7 @@ static int SurfaceJobEliminateCloseDotsTypeLessThan3(
   for (a = 0; ok && a < I->N; a++) {
     if (dot_flag[a]) {
       int i = *(MapLocusEStart(map, v));
-      if (i && map->EList) {
+      if (i && !map->EList.empty()) {
         int j = map->EList[i++];
         while (j >= 0) {
           if (j != a) {
@@ -3466,7 +3466,7 @@ static int SurfaceJobEliminateTroublesomeVerticesMark(PyMOLGlobals* G,
   for (a = 0; ok && a < I->N; a++) {
     if (dot_flag[a]) {
       int i = *(MapLocusEStart(map, v));
-      if (i && map->EList) {
+      if (i && !map->EList.empty()) {
         int j = map->EList[i++];
         int n_nbr = 0;
         float dot_sum = 0.0F;
@@ -3517,7 +3517,7 @@ static int SurfaceJobEliminateTroublesomeVertices(
       trim_cutoff *= 1.5;
     }
     while (ok && repeat_flag) {
-      MapType* map = MapNew(G, neighborhood, I->V, I->N, nullptr);
+      MapType* map = new MapType(G, neighborhood, I->V, I->N, nullptr);
       CHECKOK(ok, map);
       if (ok) {
         int a;
@@ -3547,7 +3547,7 @@ static int SurfaceJobAtomProximityCleanupPass(PyMOLGlobals* G, SurfaceJob* I,
   float* I_coord = I->coord;
   SurfaceJobAtomInfo* I_atom_info = I->atomInfo;
   int n_index = VLAGetSize(I->atomInfo);
-  MapType* map = MapNewFlagged(
+  MapType* map = new MapType(
       G, I->maxVdw + probe_radius, I_coord, n_index, nullptr, present_vla);
   int a;
   float* v;
@@ -3557,7 +3557,7 @@ static int SurfaceJobAtomProximityCleanupPass(PyMOLGlobals* G, SurfaceJob* I,
   v = I->V;
   for (a = 0; ok && a < I->N; a++) {
     int i = *(MapLocusEStart(map, v));
-    if (i && map->EList) {
+    if (i && !map->EList.empty()) {
       int j = map->EList[i++];
       while (j >= 0) {
         SurfaceJobAtomInfo* atom_info = I_atom_info + j;
@@ -3676,7 +3676,7 @@ static int SurfaceJobRefineAddNewVertices(PyMOLGlobals* G, SurfaceJob* I)
   {
     MapType* map = nullptr;
     int a;
-    map = MapNew(G, map_cutoff, I->V, I->N, nullptr);
+    map = new MapType(G, map_cutoff, I->V, I->N, nullptr);
     CHECKOK(ok, map);
     if (ok)
       ok &= MapSetupExpress(map);
@@ -3684,7 +3684,7 @@ static int SurfaceJobRefineAddNewVertices(PyMOLGlobals* G, SurfaceJob* I)
     vn = I->VN;
     for (a = 0; ok && a < I->N; a++) {
       int i = *(MapLocusEStart(map, v));
-      if (i && map->EList) {
+      if (i && !map->EList.empty()) {
         int j = map->EList[i++];
         while (ok && j >= 0) {
           if (j > a) {
@@ -3713,10 +3713,10 @@ static void SurfaceJobCheckInteriorSolventSurface(MapType* solv_map, float* v,
 {
   int ii;
   ii = *(MapLocusEStart(solv_map, v));
-  if (ii && solv_map->EList) {
+  if (ii && !solv_map->EList.empty()) {
     float* i_dot = sol_dot->dot;
     float dist = probe_rad_less;
-    int* elist_ii = solv_map->EList + ii;
+    int* elist_ii = solv_map->EList.data() + ii;
     float v_0 = v[0];
     int jj_next, jj = *(elist_ii++);
     float v_1 = v[1];
@@ -3762,7 +3762,7 @@ static void SurfaceJobCheckPresentAndWithin(MapType* map, SurfaceJob* I,
   float* I_coord = I->coord;
 
   int i = *(MapLocusEStart(map, v));
-  if (i && map->EList) {
+  if (i && !map->EList.empty()) {
     int j = map->EList[i++];
     while (j >= 0) {
       SurfaceJobAtomInfo* atom_info = I_atom_info + j;
@@ -3893,19 +3893,19 @@ static int SurfaceJobRun(PyMOLGlobals* G, SurfaceJob* I)
         ok &= !G->Interrupt;
         if (ok) {
           MapType *map, *solv_map = nullptr;
-          map = MapNewFlagged(G, I->maxVdw + probe_rad_more, I->coord,
+          map = new MapType(G, I->maxVdw + probe_rad_more, I->coord,
               VLAGetSize(I->coord) / 3, nullptr, nullptr);
           CHECKOK(ok, map);
           if (ok)
             solv_map =
-                MapNew(G, probe_rad_less, sol_dot->dot, sol_dot->nDot, nullptr);
+                new MapType(G, probe_rad_less, sol_dot->dot, sol_dot->nDot, nullptr);
           CHECKOK(ok, solv_map);
           if (ok) {
             ok &= MapSetupExpress(solv_map);
             if (ok)
               ok &= MapSetupExpress(map);
             ok &= !G->Interrupt;
-            ok &= map->EList && solv_map->EList;
+            ok &= !map->EList.empty() && !solv_map->EList.empty();
             if (sol_dot->nDot && ok) {
               Vector3f* dot = pymol::malloc<Vector3f>(sp->nDot);
               float *v0, *n0;
@@ -4307,7 +4307,7 @@ static int RepSurfaceAddNearByAtomsIfNotSurfaced(PyMOLGlobals* G, MapType* map,
         const float* v0 = cs->coordPtr(a);
         int i = *(MapLocusEStart(map, v0));
         if (optimize) {
-          if (i && map->EList) {
+          if (i && !map->EList.empty()) {
             int j = map->EList[i++];
             while (j >= 0) {
               if (present_vla[j] > 1) {
@@ -4341,7 +4341,7 @@ static int RepSurfaceRemoveAtomsNotWithinCutoff(PyMOLGlobals* G,
     if (carve_map) {
       const float* v0 = cs->coordPtr(a);
       int i = *(MapLocusEStart(carve_map, v0));
-      if (i && carve_map->EList) {
+      if (i && !carve_map->EList.empty()) {
         int j = carve_map->EList[i++];
         while (j >= 0) {
           if (within3f(carve_vla + 3 * j, v0, carve_cutoff)) {
@@ -4523,7 +4523,7 @@ Rep* RepSurfaceNew(CoordSet* cs, int state)
         }
 
         if (ok)
-          map = MapNewFlagged(G, 2 * I->max_vdw + probe_radius, cs->Coord,
+          map = new MapType(G, 2 * I->max_vdw + probe_radius, cs->Coord,
               cs->NIndex, nullptr, present_vla);
         CHECKOK(ok, map);
         if (ok)
@@ -4761,7 +4761,7 @@ static int SolventDotFilterOutSameXYZ(PyMOLGlobals* G, MapType* map,
   int ok = true;
   float* v0 = coord + 3 * a;
   int i = *(MapLocusEStart(map, v0));
-  if (i && map->EList) {
+  if (i && !map->EList.empty()) {
     int j = map->EList[i++];
     while (ok && j >= 0) {
       SurfaceJobAtomInfo* j_atom_info = atom_info + j;
@@ -4884,7 +4884,7 @@ static int SolventDotCircumscribeAroundVertex(PyMOLGlobals* G, SolventDot* I,
     v[2] = vp[2] + vx[2] * xcosr + vy[2] * ysinr;
 
     i = *(MapLocusEStart(map, v));
-    if (i && map->EList) {
+    if (i && !map->EList.empty()) {
       int j = map->EList[i++];
       while (ok && j >= 0) {
         SurfaceJobAtomInfo* j_atom_info = atom_info + j;
@@ -4946,7 +4946,7 @@ static int SolventDotMarkDotsWithinCutoff(PyMOLGlobals* G, SolventDot* I,
   int a;
   for (a = 0; ok && a < I->nDot; a++) {
     int i = *(MapLocusEStart(map, v));
-    if (i && map->EList) {
+    if (i && !map->EList.empty()) {
       int j = map->EList[i++];
       while (j >= 0) {
         if (within3f(cavityDot + (3 * j), v, cutoff)) {
@@ -5009,7 +5009,7 @@ static int SolventDotMarkDotsWithinProbeRadius(PyMOLGlobals* G, SolventDot* I,
     if (!dot_flag[a]) {
       int i = *(MapLocusEStart(map, v));
       int cnt = 0;
-      if (i && map->EList) {
+      if (i && !map->EList.empty()) {
         int j = map->EList[i++];
         while (j >= 0) {
           if (j != a) {
@@ -5076,7 +5076,7 @@ static SolventDot* SolventDotNew(PyMOLGlobals* G, float* coord,
   I->nDot = 0;
   if (ok) {
     int dotCnt = 0;
-    MapType* map = MapNewFlagged(
+    MapType* map = new MapType(
         G, max_vdw + probe_radius, coord, n_coord, nullptr, present);
     CHECKOK(ok, map);
     ok &= !G->Interrupt;
@@ -5107,7 +5107,7 @@ static SolventDot* SolventDotNew(PyMOLGlobals* G, float* coord,
       if (ok) {
         MapType* map2 = nullptr;
         if (circumscribe && (!surface_solvent)) {
-          map2 = MapNewFlagged(G, 2 * (max_vdw + probe_radius), coord, n_coord,
+          map2 = new MapType(G, 2 * (max_vdw + probe_radius), coord, n_coord,
               nullptr, present);
           CHECKOK(ok, map2);
         }
@@ -5174,7 +5174,7 @@ static SolventDot* SolventDotNew(PyMOLGlobals* G, float* coord,
       cavity_cutoff = cavity_radius - cavity_cutoff * probe_radius;
     }
     {
-      MapType* map = MapNewFlagged(
+      MapType* map = new MapType(
           G, max_vdw + cavity_radius, coord, n_coord, nullptr, present);
       CHECKOK(ok, map);
       if (G->Interrupt)
@@ -5206,7 +5206,7 @@ static SolventDot* SolventDotNew(PyMOLGlobals* G, float* coord,
       int* dot_flag = pymol::calloc<int>(I->nDot);
       ErrChkPtr(G, dot_flag);
       {
-        MapType* map = MapNew(G, cavity_cutoff, cavityDot, nCavityDot, nullptr);
+        MapType* map = new MapType(G, cavity_cutoff, cavityDot, nCavityDot, nullptr);
         if (map) {
           MapSetupExpress(map);
           ok = SolventDotMarkDotsWithinCutoff(
@@ -5229,7 +5229,7 @@ static SolventDot* SolventDotNew(PyMOLGlobals* G, float* coord,
     ErrChkPtr(G, dot_flag);
 
     {
-      MapType* map = MapNew(G, probe_radius_plus, I->dot, I->nDot, nullptr);
+      MapType* map = new MapType(G, probe_radius_plus, I->dot, I->nDot, nullptr);
       if (map) {
         int flag = true;
         MapSetupExpress(map);

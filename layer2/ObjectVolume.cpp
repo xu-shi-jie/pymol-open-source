@@ -496,7 +496,7 @@ void ObjectVolume::update()
         }
 
         // cull my friend, cull */ 
-        voxelmap = MapNew(I->G,
+        voxelmap = new MapType(I->G,
             -carve_buffer, vs->AtomVertex,
             vs->AtomVertex.size() / 3, nullptr);
         if(voxelmap) {

@@ -1517,9 +1517,9 @@ int BasisHitPerspective(BasisCallRec * BC)
   int new_ray = !BC->pass;
   RayInfo *r = BC->rr;
 
-  MapCache *cache = &BC->cache;
-  int *cache_cache = cache->Cache;
-  int *cache_CacheLink = cache->CacheLink;
+  auto* cache = &BC->cache;
+  auto* cache_cache = cache->Cache.data();
+  auto* cache_CacheLink = cache->CacheLink.data();
 
   CPrimitive *r_prim = nullptr;
 
@@ -1541,7 +1541,7 @@ int BasisHitPerspective(BasisCallRec * BC)
     else if(b > iMax1)
       b = iMax1;
 
-    if(!*(map->EMask + a * map->Dim[1] + b))
+    if(!*(map->EMask.data() + a * map->Dim[1] + b))
       return -1;
   }
 
@@ -1560,7 +1560,7 @@ int BasisHitPerspective(BasisCallRec * BC)
     int excl_trans_flag;
     int *elist, local_iflag = false;
     int terminal = -1;
-    int *ehead = map->EHead;
+    int *ehead = map->EHead.data();
     int d1d2 = map->D1D2;
     int d2 = map->Dim[2];
     const int *vert2prim = BC->vert2prim;
@@ -1569,7 +1569,7 @@ int BasisHitPerspective(BasisCallRec * BC)
     const float BasisFudge1 = BC->fudge1;
     int v2p;
     int i, ii;
-    int n_vert = BI->NVertex, n_eElem = map->NEElem;
+    int n_vert = BI->NVertex, n_eElem = map->size();
     int except1 = BC->except1;
     int except2 = BC->except2;
     int check_interior_flag = BC->check_interior && !BC->pass;
@@ -1583,7 +1583,7 @@ int BasisHitPerspective(BasisCallRec * BC)
     float *BI_Radius2 = BI->Radius2;
     copy3f(r->base, vt);
 
-    elist = map->EList;
+    elist = map->EList.data();
 
     r_dist = FLT_MAX;
 
@@ -1594,7 +1594,7 @@ int BasisHitPerspective(BasisCallRec * BC)
     if(except2 >= 0)
       except2 = vert2prim[except2];
 
-    MapCacheReset(cache);
+    MapCacheReset(*cache);
 
     {                           /* take steps with a Z-size equil to the grid spacing */
       float div = iDiv * (-MapGetDiv(BI->Map) / r->dir[2]);
@@ -1698,11 +1698,11 @@ int BasisHitPerspective(BasisCallRec * BC)
             ii = *(ip++);
             prm = BC_prim + v2p;
             do_loop = ((ii >= 0) && (ii < n_vert));
-            /*            if((v2p != except1) && (v2p != except2) && (!MapCached(cache, v2p))) { */
+            /*            if((v2p != except1) && (v2p != except2) && (!cache->cached(v2p))) { */
             if((v2p != except1) && (v2p != except2) && (!cache_cache[v2p])) {
               int prm_type = prm->type;
 
-              /*MapCache(cache,v2p); */
+              /*cache->cache(v2p); */
               cache_cache[v2p] = 1;
               cache_CacheLink[v2p] = cache->CacheStart;
               cache->CacheStart = v2p;
@@ -2010,7 +2010,7 @@ int BasisHitOrthoscopic(BasisCallRec * BC)
     int do_loop;
     int except1 = BC->except1;
     int except2 = BC->except2;
-    int n_vert = BI->NVertex, n_eElem = BI->Map->NEElem;
+    int n_vert = BI->NVertex, n_eElem = BI->Map->size();
     const int *vert2prim = BC->vert2prim;
     const float front = BC->front;
     const float back = BC->back;
@@ -2018,7 +2018,7 @@ int BasisHitOrthoscopic(BasisCallRec * BC)
     const float BasisFudge0 = BC->fudge0;
     const float BasisFudge1 = BC->fudge1;
 
-    MapCache *cache = &BC->cache;
+    auto* cache = &BC->cache;
 
     float r_tri1 = _0, r_tri2 = _0, r_dist = _0;        /* zero inits to suppress compiler warnings */
     float r_sphere0 = _0, r_sphere1 = _0, r_sphere2 = _0;
@@ -2040,11 +2040,11 @@ int BasisHitOrthoscopic(BasisCallRec * BC)
 
     r_dist = FLT_MAX;
 
-    xxtmp = BI->Map->EHead + (a * BI->Map->D1D2) + (b * BI->Map->Dim[2]) + c;
+    xxtmp = BI->Map->EHead.data() + (a * BI->Map->D1D2) + (b * BI->Map->Dim[2]) + c;
 
-    MapCacheReset(cache);
+    MapCacheReset(*cache);
 
-    elist = BI->Map->EList;
+    elist = BI->Map->EList.data();
 
     while(c >= MapBorder) {
       h = *xxtmp;
@@ -2057,9 +2057,9 @@ int BasisHitOrthoscopic(BasisCallRec * BC)
           v2p = vert2prim[i];
           do_loop = ((ii >= 0) && (ii < n_vert));
 
-          if((v2p != except1) && (v2p != except2) && (!MapCached(cache, v2p))) {
+          if((v2p != except1) && (v2p != except2) && (!cache->cached(v2p))) {
             CPrimitive *prm = BC->prim + v2p;
-            MapCache(cache, v2p);
+            cache->cache(v2p);
 
             switch (prm->type) {
             case cPrimTriangle:
@@ -2331,7 +2331,7 @@ int BasisHitShadow(BasisCallRec * BC)
     int i, ii;
     int *xxtmp;
 
-    int n_vert = BI->NVertex, n_eElem = BI->Map->NEElem;
+    int n_vert = BI->NVertex, n_eElem = BI->Map->size();
     int except1 = BC->except1;
     int except2 = BC->except2;
     const int *vert2prim = BC->vert2prim;
@@ -2340,9 +2340,9 @@ int BasisHitShadow(BasisCallRec * BC)
     const float BasisFudge0 = BC->fudge0;
     const float BasisFudge1 = BC->fudge1;
     const int label_shadow_mode = BC->label_shadow_mode;
-    MapCache *cache = &BC->cache;
-    int *cache_cache = cache->Cache;
-    int *cache_CacheLink = cache->CacheLink;
+    auto* cache = &BC->cache;
+    auto* cache_cache = cache->Cache.data();
+    auto* cache_CacheLink = cache->CacheLink.data();
     CPrimitive *BC_prim = BC->prim;
 
     float r_tri1 = _0, r_tri2 = _0, r_dist;    /* zero inits to suppress compiler warnings */
@@ -2362,11 +2362,11 @@ int BasisHitShadow(BasisCallRec * BC)
     r_trans = _1;
     r_dist = FLT_MAX;
 
-    xxtmp = BI->Map->EHead + (a * BI->Map->D1D2) + (b * BI->Map->Dim[2]) + c;
+    xxtmp = BI->Map->EHead.data() + (a * BI->Map->D1D2) + (b * BI->Map->Dim[2]) + c;
 
-    MapCacheReset(cache);
+    MapCacheReset(*cache);
 
-    elist = BI->Map->EList;
+    elist = BI->Map->EList.data();
 
     while(c >= MapBorder) {
       h = *xxtmp;
@@ -2379,11 +2379,11 @@ int BasisHitShadow(BasisCallRec * BC)
           ii = *(ip++);
           v2p = vert2prim[i];
           do_loop = ((ii >= 0) && (ii < n_vert));
-          if((v2p != except1) && (v2p != except2) && !MapCached(cache, v2p)) {
+          if((v2p != except1) && (v2p != except2) && !cache->cached(v2p)) {
             CPrimitive *prm = BC_prim + v2p;
             int prm_type;
 
-            /*MapCache(cache,v2p); */
+            /*cache->cache(v2p); */
             cache_cache[v2p] = 1;
             prm_type = prm->type;
             cache_CacheLink[v2p] = cache->CacheStart;
@@ -3213,10 +3213,10 @@ int BasisMakeMap(CBasis* I, int* vert2prim, CPrimitive* prim, int n_prim,
 	  " BasisMakeMap: Extent [%8.2f %8.2f] [%8.2f %8.2f] [%8.2f %8.2f]\n",
 	  extent[0], extent[1], extent[2], extent[3], extent[4], extent[5]
 	  ENDFB(I->G);
-	I->Map = MapNew(I->G, -sep, tempVertex, n, extent);
+	I->Map = new MapType(I->G, -sep, tempVertex, n, extent);
 	CHECKOK(ok, I->Map);
       } else {
-	I->Map = MapNew(I->G, sep, tempVertex, n, nullptr);
+	I->Map = new MapType(I->G, sep, tempVertex, n, nullptr);
 	CHECKOK(ok, I->Map);
       }
     }
@@ -3298,9 +3298,9 @@ int BasisMakeMap(CBasis* I, int* vert2prim, CPrimitive* prim, int n_prim,
     if (ok) {
       MapType *map = I->Map;
       int *sp, *ip, *ip0, ii;
-      int *elist = map->EList, *ehead = map->EHead;
-      int *elist_new = elist, *ehead_new = ehead;
-      int newelem = 0, neelem = -map->NEElem;
+      int *elist = map->EList.data();
+      int* ehead = map->EHead.data();
+      int newelem = 0, neelem = -map->size();
       int i_nVertex = I->NVertex;
       const int iMin0 = map->iMin[0];
       const int iMin1 = map->iMin[1];
@@ -3325,12 +3325,7 @@ int BasisMakeMap(CBasis* I, int* vert2prim, CPrimitive* prim, int n_prim,
                 sp = elist - h;
                 *(start) = -h;  /* flip sign */
                 i = *(sp++);
-                if(ehead_new != ehead) {
-                  ehead_new[(start - ehead) - 1] = newelem;
-                  ip = ip0 = (elist_new + newelem);
-                } else {
-                  ip = ip0 = (sp - 1);
-                }
+                ip = ip0 = (sp - 1);
 
                 while(i >= 0) {
                   int ii = *(sp++);
@@ -3385,7 +3380,7 @@ int BasisMakeMap(CBasis* I, int* vert2prim, CPrimitive* prim, int n_prim,
           if(perspective) {     /* for normal maps */
 
             int *iPtr1 =
-              map->EHead + ((j - 1) * map->D1D2) + ((k - 1) * map->Dim[2]) + (l - 1);
+              map->EHead.data() + ((j - 1) * map->D1D2) + ((k - 1) * map->Dim[2]) + (l - 1);
             for(a = jm1; a <= jp1; a++) {
               int *iPtr2 = iPtr1;
               if((a >= iMin0) && (a <= iMax0)) {
@@ -3402,12 +3397,7 @@ int BasisMakeMap(CBasis* I, int* vert2prim, CPrimitive* prim, int n_prim,
                           sp = elist - h;
                           (*start) = -h;        /* no repeat visits */
                           i = *(sp++);
-                          if(ehead_new != ehead) {
-                            ehead_new[(start - ehead)] = newelem;
-                            ip = ip0 = (elist_new + newelem);
-                          } else {
-                            ip = ip0 = (sp - 1);
-                          }
+                          ip = ip0 = (sp - 1);
 
                           while(i >= 0) {
                             int ii = *(sp++);
@@ -3471,12 +3461,7 @@ int BasisMakeMap(CBasis* I, int* vert2prim, CPrimitive* prim, int n_prim,
                           sp = elist - h;
                           (*start) = -h;        /* no repeat visits */
                           i = *(sp++);
-                          if(ehead_new != ehead) {
-                            ehead_new[(start - ehead)] = newelem;
-                            ip = ip0 = (elist_new + newelem);
-                          } else {
-                            ip = ip0 = sp - 1;
-                          }
+                          ip = ip0 = sp - 1;
 
                           while(i >= 0) {
                             int ii = *(sp++);
@@ -3522,14 +3507,6 @@ int BasisMakeMap(CBasis* I, int* vert2prim, CPrimitive* prim, int n_prim,
           v += 3;               /* happens for EVERY e! */
         }                       /* for e */
       }
-      if(ehead != ehead_new) {
-        FreeP(map->EHead);
-        VLAFreeP(map->EList);
-        map->EList = elist_new;
-        map->EHead = ehead_new;
-        map->NEElem = newelem;
-        VLASize2<int>(map->EList, map->NEElem);
-      }
     }
 
     FreeP(tempVertex);
@@ -3537,7 +3514,7 @@ int BasisMakeMap(CBasis* I, int* vert2prim, CPrimitive* prim, int n_prim,
 
   } else {
     /* simple sphere mode */
-    I->Map = MapNew(I->G, -sep, I->Vertex, I->NVertex, nullptr);
+    I->Map = new MapType(I->G, -sep, I->Vertex, I->NVertex, nullptr);
     CHECKOK(ok, I->Map);
     if (ok){
       if(perspective) {

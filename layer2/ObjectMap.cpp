@@ -171,7 +171,7 @@ int ObjectMapStateGetExcludedStats(PyMOLGlobals * G, ObjectMapState * ms, float 
 
   /* make a new map from the VLA .............. */
   if(list_size)
-    voxelmap = MapNew(G, -cutoff, vert_vla, list_size, nullptr);
+    voxelmap = new MapType(G, -cutoff, vert_vla, list_size, nullptr);
 
   if(voxelmap || (!list_size)) {
     int a, b, c;

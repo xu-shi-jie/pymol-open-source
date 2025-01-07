@@ -1,4 +1,5 @@
 
+#pragma once
 
 /*
 A* -------------------------------------------------------------------
@@ -15,13 +16,16 @@ I* Additional authors of this source file include:
 -*
 Z* -------------------------------------------------------------------
 */
-#ifndef _H_Map
-#define _H_Map
 
 /* Map - a 3-D hash object for optimizing neighbor searches */
 
-#include "PyMOLGlobals.h"
 #include "Vector.h"
+
+#include <vector>
+
+struct PyMOLGlobals;
+
+using MapFlag_t = int;
 
 struct MapType {
   PyMOLGlobals* G;
@@ -30,31 +34,43 @@ struct MapType {
   Vector3i Dim;
   int D1D2;
   Vector3i iMin, iMax;
-  int* Head = nullptr;
-  int* Link = nullptr;
-  int* EHead = nullptr;
-  int* EList = nullptr;
-  int* EMask = nullptr;
+  std::vector<int> Head;
+  std::vector<int> Link;
+  std::vector<int> EHead;
+  std::vector<int> EList;
+  std::vector<int> EMask;
   int NVert;
-  int NEElem = 0;
   Vector3f Max, Min;
-
-  ~MapType();
+  MapType(PyMOLGlobals* G, float range, const float* vert, int nVert,
+      const float* extent = nullptr, const MapFlag_t* flag = nullptr);
+  int size() const;
 };
 
-struct MapCache {
-  PyMOLGlobals* G;
-  int *Cache, *CacheLink, CacheStart;
+struct MapCacheType {
+  std::vector<int> Cache; // cached indices (0 = not cached, 1 = cached)
+  std::vector<int> CacheLink; // linked list of cached indices
+  int CacheStart = -1; // linked list head of cached indices
+
+  // TODO: all caches should have valid map.
+  // Current usages should be in a std::optional.
+  MapCacheType() = default;
+  MapCacheType(const MapType& I);
+
+  /**
+   * @param idx map index
+   * @return true if the given map index is cached
+   */
+  bool cached(std::size_t idx) const;
+
+  /**
+   * Mark the given map index as cached
+   * @param idx map index
+   */
+  void cache(std::size_t idx);
 };
 
 #define MapBorder 2
 
-MapType* MapNew(PyMOLGlobals* G, float range, const float* vert, int nVert,
-    const float* extent = nullptr);
-
-using MapFlag_t = int;
-MapType* MapNewFlagged(PyMOLGlobals* G, float range, const float* vert,
-    int nVert, const float* extent, const MapFlag_t* flag);
 int MapSetupExpress(MapType* I);
 int MapSetupExpressPerp(MapType* I, const float* vert, float front,
     int nVertHint, int negative_start, const int* spanner);
@@ -62,26 +78,16 @@ int MapSetupExpressPerp(MapType* I, const float* vert, float front,
 #define MapFree(I) delete (I)
 
 #define MapFirst(m, a, b, c)                                                   \
-  (m->Head + ((a) * m->D1D2) + ((b) * m->Dim[2]) + (c))
+  (m->Head.data() + ((a) * m->D1D2) + ((b) * m->Dim[2]) + (c))
 
 #define MapEStart(m, a, b, c)                                                  \
-  (m->EHead + ((a) * m->D1D2) + ((b) * m->Dim[2]) + (c))
+  (m->EHead.data() + ((a) * m->D1D2) + ((b) * m->Dim[2]) + (c))
 
-#define MapNext(m, a) (*(m->Link + (a)))
+#define MapNext(m, a) (m->Link[a])
 void MapLocus(const MapType* map, const float* v, int* a, int* b, int* c);
 int* MapLocusEStart(MapType* map, const float* v);
 
-#define MapCache(m, a)                                                         \
-  {                                                                            \
-    (m)->Cache[a] = 1;                                                         \
-    (m)->CacheLink[a] = (m)->CacheStart;                                       \
-    (m)->CacheStart = a;                                                       \
-  }
-#define MapCached(m, a) ((m)->Cache[a])
-
-int MapCacheInit(MapCache* M, MapType* I);
-void MapCacheReset(MapCache* M);
-void MapCacheFree(MapCache* M);
+void MapCacheReset(MapCacheType& M);
 
 float MapGetSeparation(PyMOLGlobals* G, float range, const float* mx,
     const float* mn, float* diagonal);
@@ -131,5 +137,3 @@ public:
 
 bool MapAnyWithin(
     MapType& map, const float* v_map, const float* v_query, float cutoff);
-
-#endif

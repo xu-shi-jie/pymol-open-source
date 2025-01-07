@@ -3778,7 +3778,7 @@ bool ObjectMoleculeConnect(ObjectMolecule* I, int& nBond, pymol::vla<BondType>& 
 
     /* make a map of the local neighborhood in space */
     auto const map = std::unique_ptr<MapType>(
-        MapNew(G, (max_cutoff + MAX_VDW) * (offset_begin ? -1 : 1), //
+        new MapType(G, (max_cutoff + MAX_VDW) * (offset_begin ? -1 : 1), //
             cs->Coord, cs->NIndex));
     p_return_val_if_fail(map, false); // memory error
     MapSetupExpress(map.get()); // Don't let MapEIter call this in omp parallel

@@ -1326,7 +1326,7 @@ void CoordSetUpdateCoord2IdxMap(CoordSet * I, float cutoff)
     if(I->NIndex && (!I->Coord2Idx)) {  /* NOTE: map based on stored coords */
       I->Coord2IdxReq = cutoff;
       I->Coord2IdxDiv = cutoff * 1.25F;
-      I->Coord2Idx = MapNew(I->G, I->Coord2IdxDiv, I->Coord, I->NIndex, nullptr);
+      I->Coord2Idx = new MapType(I->G, I->Coord2IdxDiv, I->Coord, I->NIndex, nullptr);
       if(I->Coord2IdxDiv < I->Coord2Idx->Div)
         I->Coord2IdxDiv = I->Coord2Idx->Div;
     }

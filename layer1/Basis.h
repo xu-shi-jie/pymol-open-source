@@ -110,7 +110,7 @@ typedef struct {
   float skip[3];
 } RayInfo;
 
-typedef struct {
+struct BasisCallRec {
   CBasis *Basis;
   RayInfo *rr;
   int except1, except2;         /* primitives to avoid */
@@ -124,13 +124,13 @@ typedef struct {
   int check_interior;
   int label_shadow_mode;
   CPrimitive *prim;
-  MapCache cache;
+  MapCacheType cache{};
   float fudge0, fudge1;
   /* returns */
   int interior_flag;
   int pass;
   float back_dist;
-} BasisCallRec;
+};
 
 int BasisInit(PyMOLGlobals * G, CBasis * I);
 void BasisFinish(CBasis * I);

@@ -52,7 +52,7 @@ typedef struct {
   int vert4, tri2;
 } EdgeRec;
 
-typedef struct {
+struct TriangleSurfaceRec {
   PyMOLGlobals *G;
   int *activeEdge;              /* active edges */
   int nActive;
@@ -65,12 +65,12 @@ typedef struct {
   EdgeRec *edge;
   int nEdge;
   MapType *map;
-  MapCache map_cache;
+  MapCacheType map_cache{};
   LinkType *link;
   int nLink;
   int N;
   float maxEdgeLenSq;
-} TriangleSurfaceRec;
+};
 
 int TriangleDegenerate(float *v1, float *n1, float *v2, float *n2, float *v3, float *n3)
 {
@@ -610,7 +610,7 @@ static void TriangleAdd(TriangleSurfaceRec * II, int i0, int i1, int i2, float *
   float vt[3], vt1[3], vt2[3], vt3[3];
   int e1, e2, e3, h, j, k, l;
   MapType *map = I->map;
-  MapCache *cache = &I->map_cache;
+  auto* cache = &I->map_cache;
 
   v0 = v + 3 * i0;
   v1 = v + 3 * i1;
@@ -627,21 +627,21 @@ static void TriangleAdd(TriangleSurfaceRec * II, int i0, int i1, int i2, float *
 
   if(e1) {
     j = map->EList[e1];
-    MapCache(cache, j);
+    cache->cache(j);
   }
 
   MapLocus(map, v1, &h, &k, &l);
   e2 = *(MapEStart(map, h, k, l));
   if(e2 && (e1 != e2)) {
     j = map->EList[e2];
-    MapCache(cache, j);
+    cache->cache(j);
   }
 
   MapLocus(map, v2, &h, &k, &l);
   e3 = *(MapEStart(map, h, k, l));
   if(e3 && (e3 != e2) && (e3 != e1)) {
     j = map->EList[e3];
-    MapCache(cache, j);
+    cache->cache(j);
   }
 
   /* make sure the triangle obeys the right hand rule */
@@ -1620,14 +1620,11 @@ static int TriangleFill(TriangleSurfaceRec * II, float *v, float *vn, int n,
   int n_pass = 0;
   int first_vert = 0, first_vert_used = 0;
 
-  MapType *map;
-  MapCache *cache;
-
   PRINTFD(I->G, FB_Triangle)
     " TriangleFill-Debug: entered: n=%d\n", n ENDFD;
 
-  map = I->map;
-  cache = &I->map_cache;
+  auto* map = I->map;
+  auto* cache = &I->map_cache;
 
   lastTri3 = -1;
   while(ok && (lastTri3 != I->nTri)) {
@@ -1673,8 +1670,8 @@ static int TriangleFill(TriangleSurfaceRec * II, float *v, float *vn, int n,
       }
       if(i1 >= 0) {
 
-        if(!MapCached(cache, first_vert_used)) {
-          MapCache(cache, first_vert_used);
+        if(!cache->cached(first_vert_used)) {
+          cache->cache(first_vert_used);
           if(first_time) {
             n_pass = n_pass / 2;
             /* if we've entered a new map quadrant then half the effective number of passes */
@@ -2316,12 +2313,14 @@ int *TrianglePointsToSurface(PyMOLGlobals * G, float *v, float *vn, int n,
       } else {
         I->maxEdgeLenSq = FLT_MAX;
       }
-
-      I->map = MapNew(I->G, cutoff, v, n, extent);
-      MapSetupExpress(I->map);
+      if (ok)
+	I->map = new MapType(I->G, cutoff, v, n, extent);
+      CHECKOK(ok, I->map);
+      if (ok)
+	ok &= MapSetupExpress(I->map);
       map = I->map;
       if (ok)
-	ok &= MapCacheInit(&I->map_cache, map);
+	      I->map_cache = MapCacheType(*map);
 
       if(G->Interrupt)
         ok = false;
@@ -2402,7 +2401,6 @@ int *TrianglePointsToSurface(PyMOLGlobals * G, float *v, float *vn, int n,
       FreeP(I->edgeStatus);
       FreeP(I->vertActive);
       FreeP(I->vertWeight);
-      MapCacheFree(&I->map_cache);
       MapFree(map);
 
       result = I->tri;

@@ -3480,7 +3480,7 @@ int RayTraceThread(CRayThreadInfo * T)
   BasisCall[0].fudge0 = BasisFudge0;
   BasisCall[0].fudge1 = BasisFudge1;
 
-  MapCacheInit(&BasisCall[0].cache, I->Basis[1].Map);
+  BasisCall[0].cache = MapCacheType(*I->Basis[1].Map);
 
   if(shadows && (n_basis > 2)) {
     int bc;
@@ -3499,7 +3499,7 @@ int RayTraceThread(CRayThreadInfo * T)
       BasisCall[bc].fudge0 = BasisFudge0;
       BasisCall[bc].fudge1 = BasisFudge1;
       BasisCall[bc].label_shadow_mode = label_shadow_mode;
-      MapCacheInit(&BasisCall[bc].cache, I->Basis[bc].Map);
+      BasisCall[bc].cache = MapCacheType(*I->Basis[bc].Map);
     }
   }
 
@@ -4494,14 +4494,6 @@ int RayTraceThread(CRayThreadInfo * T)
   }                             /* end of for */
   /*  if(T->n_thread>1) 
      printf(" Ray: Thread %d: Complete.\n",T->phase+1); */
-  MapCacheFree(&BasisCall[0].cache);
-
-  if(shadows && (I->NBasis > 2)) {
-    int bc;
-    for(bc = 2; bc < I->NBasis; bc++) {
-      MapCacheFree(&BasisCall[bc].cache);
-    }
-  }
   return (n_hit);
 }
 

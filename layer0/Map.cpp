@@ -27,45 +27,34 @@ Z* ------------------------------------------------------------------- */
 
 #include "pymol/algorithm.h"
 
-static MapType* _MapNew(PyMOLGlobals* G, float range, const float* vert,
-    int nVert, const float* extent, const int* flag);
-
 float MapGetDiv(MapType* I)
 {
   return I->Div;
 }
 
-MapType::~MapType()
+MapCacheType::MapCacheType(const MapType& map)
 {
-  auto I = this;
-  {
-    FreeP(I->Head) FreeP(I->Link);
-    FreeP(I->EHead);
-    FreeP(I->EMask);
-    VLAFreeP(I->EList);
-  }
+  Cache.assign(map.NVert, 0);
+  CacheLink.resize(map.NVert);
 }
 
-int MapCacheInit(MapCache* M, MapType* I)
+bool MapCacheType::cached(std::size_t idx) const
 {
-  PyMOLGlobals* G = I->G;
-  int ok = true;
-
-  M->G = G;
-  M->Cache = pymol::calloc<int>(I->NVert);
-  CHECKOK(ok, M->Cache);
-  if (ok)
-    M->CacheLink = pymol::malloc<int>(I->NVert);
-  CHECKOK(ok, M->CacheLink);
-  M->CacheStart = -1;
-  return ok;
+  return Cache[idx] != 0;
 }
 
-void MapCacheReset(MapCache* M)
+void MapCacheType::cache(std::size_t idx)
 {
-  int i = M->CacheStart;
-  int* cachep = M->Cache;
-  int* clinkp = M->CacheLink;
+  Cache[idx] = 1;
+  CacheLink[idx] = CacheStart;
+  CacheStart = idx;
+}
+
+void MapCacheReset(MapCacheType& M)
+{
+  int i = M.CacheStart;
+  auto* cachep = M.Cache.data();
+  auto* clinkp = M.CacheLink.data();
   int i1 = 0, i2 = 0, i3 = 0, i4 = 0, ii;
   while (i >= 0) { /* believe it or not, unrolling gives us almost 10%!!! */
     ii = clinkp[i];
@@ -95,13 +84,7 @@ void MapCacheReset(MapCache* M)
     cachep[i4] = 0; /* this doesn't look safe, but it is. i1-i4 are always valid
                        indices */
   }
-  M->CacheStart = -1;
-}
-
-void MapCacheFree(MapCache* M)
-{
-  FreeP(M->Cache);
-  FreeP(M->CacheLink);
+  M.CacheStart = -1;
 }
 
 #define MapSafety 0.01F
@@ -139,7 +122,7 @@ int MapInsideXY(MapType* I, const float* v, int* a, int* b, int* c)
       btmp = I->iMax[1];
   }
 
-  if (!*(I->EMask + I->Dim[1] * atmp + btmp))
+  if (!*(I->EMask.data() + I->Dim[1] * atmp + btmp))
     return (false);
 
   if (ctmp < I->iMin[2])
@@ -159,10 +142,10 @@ int MapInsideXY(MapType* I, const float* v, int* a, int* b, int* c)
 int MapSetupExpressXY(MapType* I, int n_vert, int negative_start)
 { /* setup a list of XY neighbors for each square */
   PyMOLGlobals* G = I->G;
-  int n, a, b, c, flag;
+  int a, b, c, flag;
   int d, e, i;
   unsigned int mapSize;
-  int st, dim2;
+  int dim2;
   int n_alloc = n_vert * 15; /* emprical est. */
   int ok = true;
 
@@ -170,25 +153,25 @@ int MapSetupExpressXY(MapType* I, int n_vert, int negative_start)
   " MapSetupExpressXY-Debug: entered.\n" ENDFD;
 
   mapSize = I->Dim[0] * I->Dim[1] * I->Dim[2];
-  I->EHead = pymol::calloc<int>(mapSize);
-  CHECKOK(ok, I->EHead);
+  I->EHead.assign(mapSize, 0);
+  if (ok) {
+    I->EList.reserve(n_alloc);
+  }
   if (ok)
-    I->EList = (int*) VLAMalloc(n_alloc, sizeof(int), ELIST_GROW_FACTOR, 0);
-  CHECKOK(ok, I->EList);
-  if (ok)
-    I->EMask = pymol::calloc<int>(I->Dim[0] * I->Dim[1]);
-  CHECKOK(ok, I->EMask);
+    I->EMask.assign(I->Dim[0] * I->Dim[1], 0);
 
-  n = 1;
+  I->EList.push_back(0);
+  int n = 1;
   dim2 = I->Dim[2];
 
   for (a = I->iMin[0]; ok && a <= I->iMax[0]; a++) {
     for (b = I->iMin[1]; ok && b <= I->iMax[1]; b++) {
       for (c = I->iMin[2]; ok && c <= I->iMax[2];
            c++) { /* a better alternative exists... */
-        int* iPtr1 = (I->Head + ((a - 1) * I->D1D2) + ((b - 1) * dim2) + c);
+        int* iPtr1 =
+            (I->Head.data() + ((a - 1) * I->D1D2) + ((b - 1) * dim2) + c);
 
-        st = n;
+        int st = n;
         flag = false;
 
         for (d = a - 1; d <= a + 1; d++) {
@@ -201,10 +184,7 @@ int MapSetupExpressXY(MapType* I, int n_vert, int negative_start)
             if (i >= 0) {
               flag = true;
               while (i >= 0) {
-
-                VLACheck2<int>(I->EList, n);
-                CHECKOK(ok, I->EList);
-                I->EList[n] = i;
+                I->EList.push_back(i);
                 n++;
                 i = MapNext(I, i);
               }
@@ -217,11 +197,9 @@ int MapSetupExpressXY(MapType* I, int n_vert, int negative_start)
         }
 
         if (ok && flag) {
-          *(I->EMask + I->Dim[1] * a + b) = true;
+          *(I->EMask.data() + I->Dim[1] * a + b) = true;
           *(MapEStart(I, a, b, c)) = negative_start ? -st : st;
-          VLACheck2<int>(I->EList, n);
-          CHECKOK(ok, I->EList);
-          I->EList[n] = -1;
+          I->EList.push_back(-1);
           n++;
         }
       }
@@ -232,9 +210,7 @@ int MapSetupExpressXY(MapType* I, int n_vert, int negative_start)
   " MapSetupExpressXY: %d rows in express table\n", n ENDFB(G);
 
   if (ok) {
-    I->NEElem = n;
-    VLASize2<int>(I->EList, I->NEElem);
-    CHECKOK(ok, I->EList);
+    I->EList.shrink_to_fit();
   }
   PRINTFD(G, FB_Map)
   " MapSetupExpressXY-Debug: leaving...\n" ENDFD;
@@ -257,16 +233,15 @@ int MapSetupExpressXYVert(
       n_vert, negative_start ENDFD;
 
   /*mapSize        = I->Dim[0]*I->Dim[1]*I->Dim[2]; */
-  I->EHead = pymol::calloc<int>(I->Dim[0] * I->Dim[1] * I->Dim[2]);
-  CHECKOK(ok, I->EHead);
+  I->EHead.assign(I->Dim[0] * I->Dim[1] * I->Dim[2], 0);
   if (ok)
-    I->EMask = pymol::calloc<int>(I->Dim[0] * I->Dim[1]);
-  CHECKOK(ok, I->EMask);
-  if (ok)
-    I->EList = (int*) VLAMalloc(
-        n_alloc, sizeof(int), ELIST_GROW_FACTOR, 0); /* autozero */
-  CHECKOK(ok, I->EList);
+    I->EMask.assign(I->Dim[0] * I->Dim[1], 0);
+  if (ok) {
+    I->EList.clear();
+    I->EList.reserve(n_alloc);
+  }
 
+  I->EList.push_back(0);
   n = 1;
   v = vert;
   dim2 = I->Dim[2];
@@ -274,8 +249,8 @@ int MapSetupExpressXYVert(
   for (h = 0; h < n_vert; h++) {
     MapLocus(I, v, &j, &k, &c);
 
-    eBase = I->EHead + ((j - 1) * I->D1D2) + ((k - 1) * dim2) + c;
-    hBase = I->Head + (((j - 1) - 1) * I->D1D2);
+    eBase = I->EHead.data() + ((j - 1) * I->D1D2) + ((k - 1) * dim2) + c;
+    hBase = I->Head.data() + (((j - 1) - 1) * I->D1D2);
 
     for (a = j - 1; ok && a <= j + 1; a++) {
       int* ePtr1 = eBase;
@@ -299,9 +274,7 @@ int MapSetupExpressXYVert(
                 if (i > -1) {
                   flag = true;
                   while (ok && i > -1) {
-                    VLACheck2<int>(I->EList, n);
-                    CHECKOK(ok, I->EList);
-                    I->EList[n] = i;
+                    I->EList.push_back(i);
                     n++;
                     i = MapNext(I, i);
                   }
@@ -314,11 +287,9 @@ int MapSetupExpressXYVert(
           }
 
           if (flag) {
-            *(I->EMask + I->Dim[1] * a + b) = true;
+            *(I->EMask.data() + I->Dim[1] * a + b) = true;
             *(MapEStart(I, a, b, c)) = negative_start ? -st : st;
-            VLACheck2<int>(I->EList, n);
-            CHECKOK(ok, I->EList);
-            I->EList[n] = -1;
+            I->EList.push_back(-1);
             n++;
           }
         }
@@ -337,9 +308,7 @@ int MapSetupExpressXYVert(
   " MapSetupExpressXYVert: %d rows in express table\n", n ENDFB(G);
 
   if (ok) {
-    I->NEElem = n;
-    VLASize2<int>(I->EList, I->NEElem);
-    CHECKOK(ok, I->EList);
+    I->EList.shrink_to_fit();
   }
   PRINTFD(G, FB_Map)
   " MapSetupExpressXYVert-Debug: leaving...\n" ENDFD;
@@ -350,7 +319,6 @@ int MapSetupExpressPerp(MapType* I, const float* vert, float front,
     int nVertHint, int negative_start, const int* spanner)
 {
   PyMOLGlobals* G = I->G;
-  int n = 0;
   int a, b, c, i;
 
   unsigned int mapSize;
@@ -373,21 +341,21 @@ int MapSetupExpressPerp(MapType* I, const float* vert, float front,
   " MapSetupExpress-Debug: entered.\n" ENDFD;
 
   mapSize = I->Dim[0] * I->Dim[1] * I->Dim[2];
-  I->EHead = pymol::calloc<int>(mapSize);
-  CHECKOK(ok, I->EHead);
+  I->EHead.assign(mapSize, 0);
+  if (ok) {
+    I->EList.reserve(n_alloc);
+  }
   if (ok)
-    I->EList = (int*) VLAMalloc(n_alloc, sizeof(int), ELIST_GROW_FACTOR, 0);
-  CHECKOK(ok, I->EList);
-  if (ok)
-    I->EMask = pymol::calloc<int>(I->Dim[0] * I->Dim[1]);
-  CHECKOK(ok, I->EMask);
+    I->EMask.assign(I->Dim[0] * I->Dim[1], 0);
 
-  emask = I->EMask;
+  emask = I->EMask.data();
   dim1 = I->Dim[1];
-  link = I->Link;
+  link = I->Link.data();
   premult = -front * iDiv;
 
-  n = 1;
+  I->EList.push_back(0);
+  int n = 1;
+
   for (a = (iMin0 - 1); ok && a <= (iMax0 + 1); a++)
     for (b = (iMin1 - 1); ok && b <= (iMax1 + 1); b++)
       for (c = (I->iMin[2] - 1); ok && c <= (I->iMax[2] + 1); c++) {
@@ -440,7 +408,7 @@ int MapSetupExpressPerp(MapType* I, const float* vert, float front,
                     cm1 = c - 1, cp1 = c + 1;
           const int dim2 = I->Dim[2];
           int flag = false;
-          int* hPtr1 = I->Head + ((am1) *I->D1D2) + ((bm1) *dim2) + cm1;
+          int* hPtr1 = I->Head.data() + ((am1) *I->D1D2) + ((bm1) *dim2) + cm1;
           st = n;
           for (d = am1; ok && d <= ap1; d++) {
             int* hPtr2 = hPtr1;
@@ -456,9 +424,7 @@ int MapSetupExpressPerp(MapType* I, const float* vert, float front,
                       /* for non-voxel-spanners, only spread in the XY plane
                        * (memory use ~ 9X instead of 27X -- a big difference!)
                        */
-                      VLACheck2<int>(I->EList, n);
-                      CHECKOK(ok, I->EList);
-                      I->EList[n] = i;
+                      I->EList.push_back(i);
                       n++;
                     }
                     i = link[i];
@@ -471,9 +437,7 @@ int MapSetupExpressPerp(MapType* I, const float* vert, float front,
           }
           if (ok && flag) {
             *(MapEStart(I, a, b, c)) = negative_start ? -st : st;
-            VLACheck2<int>(I->EList, n);
-            CHECKOK(ok, I->EList);
-            I->EList[n] = -1;
+            I->EList.push_back(-1);
             n++;
           }
         }
@@ -481,9 +445,7 @@ int MapSetupExpressPerp(MapType* I, const float* vert, float front,
   PRINTFB(G, FB_Map, FB_Blather)
   " MapSetupExpressPerp: %d rows in express table \n", n ENDFB(G);
   if (ok) {
-    I->NEElem = n;
-    VLASize2<int>(I->EList, I->NEElem);
-    CHECKOK(ok, I->EList);
+    I->EList.shrink_to_fit();
   }
   PRINTFD(G, FB_Map)
   " MapSetupExpress-Debug: leaving...n=%d\n", n ENDFD;
@@ -496,30 +458,27 @@ int MapSetupExpress(MapType* I)
   int n = 0;
   int c, d, e, f, i, cm1, cp2, D1D2 = I->D1D2, D2 = I->Dim[2];
   int mx2 = I->iMax[2];
-  int* link = I->Link;
+  int* link = I->Link.data();
   int st, flag;
   int *i_ptr3, *i_ptr4, *i_ptr5;
-  int* e_list = nullptr;
   int mx0 = I->iMax[0], mx1 = I->iMax[1], a, am1, ap2, *i_ptr1, b, bm1, bp2,
       *i_ptr2;
-  unsigned int mapSize;
   int ok = true;
 
   PRINTFD(G, FB_Map)
   " MapSetupExpress-Debug: entered.\n" ENDFD;
 
-  mapSize = I->Dim[0] * I->Dim[1] * I->Dim[2];
-  I->EHead = pymol::calloc<int>(mapSize);
-  CHECKOK(ok, I->EHead);
-  if (ok)
-    e_list = (int*) VLAMalloc(1000, sizeof(int), 5, 0);
-  CHECKOK(ok, e_list);
+  auto mapSize = I->Dim[0] * I->Dim[1] * I->Dim[2];
+  I->EHead.assign(mapSize, 0);
+  std::vector<int> e_list;
+  e_list.reserve(1000);
 
+  e_list.push_back(0);
   n = 1;
   for (a = (I->iMin[0] - 1); ok && a <= mx0; a++) {
     am1 = a - 1;
     ap2 = a + 2;
-    i_ptr1 = I->Head + am1 * D1D2;
+    i_ptr1 = I->Head.data() + am1 * D1D2;
     for (b = (I->iMin[1] - 1); ok && b <= mx1; b++) {
       bm1 = b - 1;
       bp2 = b + 2;
@@ -538,10 +497,8 @@ int MapSetupExpress(MapType* I)
               if ((i = *(i_ptr5++)) >= 0) {
                 flag = true;
                 do {
-                  VLACheck2<int>(e_list, n);
-                  CHECKOK(ok, e_list);
-                  if (ok)
-                    e_list[n++] = i;
+                  e_list.push_back(i);
+                  n++;
                   /*i=MapNext(I,i); */
                 } while (ok && (i = link[i]) >= 0);
               }
@@ -556,9 +513,7 @@ int MapSetupExpress(MapType* I)
         if (ok) {
           if (flag) {
             *(MapEStart(I, a, b, c)) = st;
-            VLACheck2<int>(e_list, n);
-            CHECKOK(ok, e_list);
-            e_list[n] = -1;
+            e_list.push_back(-1);
             n++;
           } else {
             *(MapEStart(I, a, b, c)) = 0;
@@ -568,10 +523,8 @@ int MapSetupExpress(MapType* I)
     }
   }
   if (ok) {
-    I->EList = e_list;
-    I->NEElem = n;
-    VLASize2<int>(I->EList, I->NEElem);
-    CHECKOK(ok, I->EList);
+    I->EList = std::move(e_list);
+    I->EList.shrink_to_fit();
   }
   PRINTFD(G, FB_Map)
   " MapSetupExpress-Debug: leaving...n=%d\n", n ENDFD;
@@ -722,21 +675,10 @@ float MapGetSeparation(PyMOLGlobals* G, float range, const float* mx,
   return (divSize);
 }
 
-MapType* MapNew(PyMOLGlobals* G, float range, const float* vert, int nVert,
-    const float* extent)
+MapType::MapType(PyMOLGlobals* G, float range, const float* vert, int nVert,
+    const float* extent, const int* flag)
 {
-  return _MapNew(G, range, vert, nVert, extent, nullptr);
-}
-
-MapType* MapNewFlagged(PyMOLGlobals* G, float range, const float* vert,
-    int nVert, const float* extent, const int* flag)
-{
-  return _MapNew(G, range, vert, nVert, extent, flag);
-}
-
-static MapType* _MapNew(PyMOLGlobals* G, float range, const float* vert,
-    int nVert, const float* extent, const int* flag)
-{
+  auto I = this;
   int mapSize;
   int h, k, l;
   int* list;
@@ -745,13 +687,8 @@ static MapType* _MapNew(PyMOLGlobals* G, float range, const float* vert,
   Vector3f diagonal;
   int ok = true;
 
-  auto I = new MapType();
   PRINTFD(G, FB_Map)
   " MapNew-Debug: entered.\n" ENDFD;
-  CHECKOK(ok, I);
-  if (!ok) {
-    return nullptr;
-  }
   /* Initialize */
   I->G = G;
 
@@ -766,14 +703,7 @@ static MapType* _MapNew(PyMOLGlobals* G, float range, const float* vert,
   };
 
   /* initialize an empty cache for the map */
-  I->Link = pymol::malloc<int>(nVert);
-  CHECKOK(ok, I->Link);
-  if (!ok) {
-    MapFree(I);
-    return nullptr;
-  }
-  for (int a = 0; a < nVert; a++)
-    I->Link[a] = -1;
+  I->Link.assign(nVert, -1);
 
   /* map extents; set if valid, otherwise determine based on the flagged
    * vertices */
@@ -924,20 +854,7 @@ static MapType* _MapNew(PyMOLGlobals* G, float range, const float* vert,
 
   /* compute size and allocate */
   mapSize = I->Dim[0] * I->Dim[1] * I->Dim[2];
-  I->Head = pymol::malloc<int>(mapSize);
-  CHECKOK(ok, I->Head);
-  if (!ok) {
-    MapFree(I);
-    return nullptr;
-  }
-  /* initialize */
-  /*  for(a=0;a<I->Dim[0];a++)
-     for(b=0;b<I->Dim[1];b++)
-     for(c=0;c<I->Dim[2];c++)
-     *(MapFirst(I,a,b,c))=-1; */
-
-  /* Trick for fast clearing to -1! */
-  memset(I->Head, 0xFF, mapSize * sizeof(int));
+  I->Head.assign(mapSize, -1);
 
   I->NVert = nVert;
 
@@ -972,17 +889,15 @@ static MapType* _MapNew(PyMOLGlobals* G, float range, const float* vert,
 
   PRINTFD(G, FB_Map)
   " MapNew-Debug: leaving...\n" ENDFD;
-
-  return (I);
 }
 
 MapEIter::MapEIter(MapType& map, const float* v, bool excl)
 {
-  if (!map.EList) {
+  if (map.EList.empty()) {
     MapSetupExpress(&map);
   }
 
-  m_elist = map.EList;
+  m_elist = map.EList.data();
 
   if (excl) {
     m_i = MapExclLocusEStart(&map, v);
@@ -1008,4 +923,9 @@ bool MapAnyWithin(
     }
   }
   return false;
+}
+
+int MapType::size() const
+{
+  return EList.size();
 }
