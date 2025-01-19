@@ -232,10 +232,10 @@ struct AttribDesc {
 };
 using AttribDataDesc = std::vector< AttribDesc >;
 
-class gpuBuffer_t {
+class GPUBuffer {
   friend class CShaderMgr;
 public:
-  virtual ~gpuBuffer_t() {};
+  virtual ~GPUBuffer() {};
   virtual size_t get_hash_id() { return _hashid; }
   virtual void bind() const = 0;
 protected:
@@ -248,6 +248,11 @@ enum class buffer_layout {
   SEPARATE,   // multiple vbos
   SEQUENTIAL, // single vbo
   INTERLEAVED // single vbo
+};
+
+enum class MemoryProperty {
+  DeviceLocal,
+  HostVisible,
 };
 
 // -----------------------------------------------------------------------------
@@ -269,13 +274,13 @@ enum class buffer_layout {
  * INTERLEAVED:
  *   vbo [ data1[0], data2[0], ..., dataN[0] | ... | data1[M], data2[M], ..., dataN[M] ]
  */
-class GenericBuffer : public gpuBuffer_t
+class GenericBuffer : public GPUBuffer
 {
   friend class CShaderMgr;
 
 public:
-
-  GenericBuffer(buffer_layout layout = buffer_layout::SEPARATE, GLenum usage = GL_STATIC_DRAW);
+  GenericBuffer(buffer_layout layout = buffer_layout::SEPARATE,
+      MemoryProperty properties = MemoryProperty::DeviceLocal);
   GenericBuffer(const GenericBuffer&) = delete;
   GenericBuffer& operator=(const GenericBuffer&) = delete;
   GenericBuffer(GenericBuffer&&) = delete;
@@ -325,6 +330,8 @@ public:
    */
   void bufferReplaceData(size_t offset, size_t len, const void* data);
 
+  const BufferDataDesc& getVertDesc() const;
+
 protected:
 
   /**
@@ -371,7 +378,7 @@ protected:
   bool m_status{false};
   bool m_interleaved{false};
   GLuint m_interleavedID{0};
-  const GLenum m_buffer_usage{GL_STATIC_DRAW};
+  MemoryProperty m_memProperty{MemoryProperty::DeviceLocal};
   const buffer_layout m_layout{ buffer_layout::SEPARATE };
   size_t m_stride{0};
   BufferDataDesc m_desc;
@@ -381,12 +388,12 @@ protected:
 /**
  * Vertex buffer specialization
  */
-class VertexBuffer : public GenericBuffer {
+class VertexBufferGL : public GenericBuffer {
   void bind_attrib(GLuint prg, const BufferDesc& d, GLuint glID);
 
 public:
-  VertexBuffer(buffer_layout layout = buffer_layout::SEPARATE,
-      GLenum usage = GL_STATIC_DRAW);
+  VertexBufferGL(buffer_layout layout = buffer_layout::SEPARATE,
+      MemoryProperty property = MemoryProperty::DeviceLocal);
 
   void bind() const override;
 
@@ -408,7 +415,7 @@ private:
 /**
  * Index buffer specialization
  */
-class IndexBuffer : public GenericBuffer {
+class IndexBufferGL : public GenericBuffer {
 public:
   using GenericBuffer::GenericBuffer;
 
@@ -418,8 +425,8 @@ public:
 };
 
 // Forward Decls
-class frameBuffer_t;
-class renderBuffer_t;
+class FramebufferGL;
+class RenderbufferGL;
 
 /***********************************************************************
  * RENDERBUFFER
@@ -434,15 +441,15 @@ namespace rbo {
   void unbind();
 };
 
-class renderBuffer_t : public gpuBuffer_t {
-  friend class frameBuffer_t;
+class RenderbufferGL : public GPUBuffer {
+  friend class FramebufferGL;
   friend class CShaderMgr;
 public:
-  renderBuffer_t(int width, int height, rbo::storage storage) :
+  RenderbufferGL(int width, int height, rbo::storage storage) :
     _width(width), _height(height), _storage(storage) {
     genBuffer();
   }
-  ~renderBuffer_t() {
+  ~RenderbufferGL() {
     freeBuffer();
   }
 
@@ -515,11 +522,15 @@ namespace tex {
   void env(tex::env_name, tex::env_param);
 };
 
-class textureBuffer_t : public gpuBuffer_t {
-  friend class frameBuffer_t;
+struct GPUTexture : public GPUBuffer
+{
+};
+
+class TextureGL : public GPUTexture {
+  friend class FramebufferGL;
 public:
   // Generates a 1D texture
-  textureBuffer_t(tex::format format, tex::data_type type,
+  TextureGL(tex::format format, tex::data_type type,
                   tex::filter mag, tex::filter min,
                   tex::wrap wrap_s) :
     _dim(tex::dim::D1), _format(format), _type(type),
@@ -528,7 +539,7 @@ public:
       genBuffer();
     };
   // Generates a 2D texture
-  textureBuffer_t(tex::format format, tex::data_type type,
+  TextureGL(tex::format format, tex::data_type type,
                   tex::filter mag, tex::filter min,
                   tex::wrap wrap_s, tex::wrap wrap_t) :
     _dim(tex::dim::D2), _format(format), _type(type),
@@ -537,7 +548,7 @@ public:
       genBuffer();
     };
   // Generates a 3D texture
-  textureBuffer_t(tex::format format, tex::data_type type,
+  TextureGL(tex::format format, tex::data_type type,
                   tex::filter mag, tex::filter min,
                   tex::wrap wrap_s, tex::wrap wrap_t,
                   tex::wrap wrap_r) :
@@ -546,7 +557,7 @@ public:
     {
       genBuffer();
     };
-  ~textureBuffer_t() {
+  ~TextureGL() {
     freeBuffer();
   }
 
@@ -603,22 +614,26 @@ namespace fbo {
   void unbind();
 }
 
-class frameBuffer_t : public gpuBuffer_t {
+class FramebufferGL : public GPUBuffer {
   friend class CShaderMgr;
 public:
-  frameBuffer_t() {
+  FramebufferGL() {
     genBuffer();
   }
-  ~frameBuffer_t() {
+  ~FramebufferGL() {
     freeBuffer();
   }
 
-  void attach_texture(textureBuffer_t * texture, fbo::attachment loc);
-  void attach_renderbuffer(renderBuffer_t * renderbuffer, fbo::attachment loc);
+  void attach_texture(TextureGL * texture, fbo::attachment loc);
+  void attach_renderbuffer(RenderbufferGL * renderbuffer, fbo::attachment loc);
   void print_fbo();
 
   void bind() const override;
   void unbind() const;
+  void blitTo(const FramebufferGL& dest, glm::ivec2 srcExtent, glm::ivec2 dstOffset);
+  void blitTo(std::uint32_t dest_id, glm::ivec2 srcExtent, glm::ivec2 dstOffset);
+  std::uint32_t id() const noexcept { return _id; }
+
 private:
   void genBuffer();
   void freeBuffer();
@@ -647,14 +662,14 @@ struct rt_layout_t {
   int         height { 0 };
 };
 
-class renderTarget_t : public gpuBuffer_t {
+class RenderTargetGL : public GPUBuffer {
   friend class CShaderMgr;
 public:
   using shape_type = glm::ivec2;
 
-  renderTarget_t(shape_type size) : _size(size) {}
-  renderTarget_t(int width, int height) : _size(width, height) {}
-  ~renderTarget_t();
+  RenderTargetGL(shape_type size) : _size(size) {}
+  RenderTargetGL(int width, int height) : _size(width, height) {}
+  ~RenderTargetGL();
 
   void bind() const override { bind(true); };
   void bind(bool clear) const;
@@ -664,20 +679,23 @@ public:
     _rbo->bind();
   }
 
-  void layout(std::vector<rt_layout_t>&& desc, renderBuffer_t * with_rbo = nullptr);
+  void layout(std::vector<rt_layout_t>&& desc, RenderbufferGL * with_rbo = nullptr);
   void resize(shape_type size);
 
   const shape_type& size() const { return _size; };
 
-  renderBuffer_t* rbo() const noexcept { return _rbo; }
-  frameBuffer_t* fbo() const noexcept { return _fbo; }
-  const std::vector<textureBuffer_t*>& textures() const noexcept { return _textures; }
+  RenderbufferGL* rbo() const noexcept { return _rbo; }
+  FramebufferGL* fbo() const noexcept { return _fbo; }
+  const std::vector<TextureGL*>& textures() const noexcept { return _textures; }
+
+  void blitTo(std::uint32_t dest_id, glm::ivec2 dstOffset);
+  void blitTo(const RenderTargetGL& dest, glm::ivec2 dstOffset);
 
 protected:
   bool _shared_rbo { false };
   shape_type _size;
-  frameBuffer_t * _fbo;
-  renderBuffer_t * _rbo;
+  FramebufferGL * _fbo;
+  RenderbufferGL * _rbo;
   std::vector<rt_layout_t> _desc;
-  std::vector<textureBuffer_t *> _textures;
+  std::vector<TextureGL *> _textures;
 };

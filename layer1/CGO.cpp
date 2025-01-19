@@ -2368,7 +2368,7 @@ static int OptimizePointsToVBO(const CGO* I, CGO* cgo,
     short arrays = CGO_VERTEX_ARRAY | CGO_PICK_COLOR_ARRAY;
     auto fmt = GetNormalColorFormatSize(I->G);
 
-    VertexBuffer* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBuffer>();
+    auto* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBufferGL>();
 
     BufferDataDesc bufData = {{"a_Vertex", VertexFormat::Float3,
         sizeof(float) * num_total_vertices_points * 3, vertexVals}};
@@ -2915,8 +2915,8 @@ static bool OptimizeVertsToVBONotIndexed(const CGO* I, CGO* cgo,
   if (ok) {
     auto fmt = GetNormalColorFormatSize(G);
 
-    VertexBuffer* vbo =
-        G->ShaderMgr->newGPUBuffer<VertexBuffer>(buffer_layout::SEQUENTIAL);
+    auto* vbo =
+        G->ShaderMgr->newGPUBuffer<VertexBufferGL>(buffer_layout::SEQUENTIAL);
     BufferDataDesc bufData = {{"a_Vertex", VertexFormat::Float3,
         sizeof(float) * count.num_total_indexes * 3, vertexVals}};
     if (has_normals) {
@@ -2936,8 +2936,8 @@ static bool OptimizeVertsToVBONotIndexed(const CGO* I, CGO* cgo,
     size_t vboid = vbo->get_hash_id();
     // picking VBO: generate a buffer twice the size needed, for each picking
     // pass
-    VertexBuffer* pickvbo = G->ShaderMgr->newGPUBuffer<VertexBuffer>(
-        buffer_layout::SEQUENTIAL, GL_DYNAMIC_DRAW);
+    auto* pickvbo = G->ShaderMgr->newGPUBuffer<VertexBufferGL>(
+        buffer_layout::SEQUENTIAL, MemoryProperty::HostVisible);
     ok = pickvbo->bufferData({BufferDesc{"a_Color", VertexFormat::UByte4Norm,
                                   sizeof(float) * count.num_total_indexes},
         BufferDesc{"a_Color", VertexFormat::UByte4Norm,
@@ -3179,8 +3179,8 @@ static bool OptimizeLinesToVBONotIndexed(const CGO* I, CGO* cgo,
   }
   auto fmt = GetNormalColorFormatSize(G);
 
-  VertexBuffer* vbo =
-      G->ShaderMgr->newGPUBuffer<VertexBuffer>(buffer_layout::SEQUENTIAL);
+  auto* vbo =
+      G->ShaderMgr->newGPUBuffer<VertexBufferGL>(buffer_layout::SEQUENTIAL);
   BufferDataDesc bufData = {{"a_Vertex", VertexFormat::Float3,
       sizeof(float) * count.num_total_indexes_lines * 3, vertexVals}};
 
@@ -3197,8 +3197,8 @@ static bool OptimizeLinesToVBONotIndexed(const CGO* I, CGO* cgo,
 
   // picking VBO: generate a buffer twice the size needed, for each picking
   // pass
-  VertexBuffer* pickvbo = G->ShaderMgr->newGPUBuffer<VertexBuffer>(
-      buffer_layout::SEQUENTIAL, GL_DYNAMIC_DRAW);
+  auto* pickvbo = G->ShaderMgr->newGPUBuffer<VertexBufferGL>(
+      buffer_layout::SEQUENTIAL, MemoryProperty::HostVisible);
   ok &= pickvbo->bufferData({BufferDesc("a_Color", VertexFormat::UByte4Norm,
                                  sizeof(float) * count.num_total_indexes_lines),
       BufferDesc("a_Color", VertexFormat::UByte4Norm,
@@ -3573,7 +3573,7 @@ static bool OptimizeVertsToVBOIndexed(const CGO* I, CGO* cgo,
   if (ok) {
     auto fmt = GetNormalColorFormatSize(I->G);
 
-    VertexBuffer* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBuffer>();
+    auto* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBufferGL>();
     ok &= vbo->bufferData(
         {BufferDesc{"a_Vertex", VertexFormat::Float3,
               sizeof(float) * count.num_total_vertices * 3, vertexVals},
@@ -3584,15 +3584,16 @@ static bool OptimizeVertsToVBOIndexed(const CGO* I, CGO* cgo,
             BufferDesc{"a_Accessibility", VertexFormat::Float,
                 sizeof(float) * count.num_total_vertices, accessibilityVals}});
 
-    IndexBuffer* ibo = I->G->ShaderMgr->newGPUBuffer<IndexBuffer>();
+    auto* ibo = I->G->ShaderMgr->newGPUBuffer<IndexBufferGL>();
     ok &= ibo->bufferData({BufferDesc{nullptr, VertexFormat::UInt,
         sizeof(VertexIndex_t) * count.num_total_indexes, vertexIndices.data()}});
 
     size_t vboid = vbo->get_hash_id();
     size_t iboid = ibo->get_hash_id();
 
-    VertexBuffer* pickvbo = I->G->ShaderMgr->newGPUBuffer<VertexBuffer>(
-        buffer_layout::SEQUENTIAL, GL_DYNAMIC_DRAW);
+
+    auto* pickvbo = I->G->ShaderMgr->newGPUBuffer<VertexBufferGL>(
+        buffer_layout::SEQUENTIAL, MemoryProperty::HostVisible);
     ok &= pickvbo->bufferData({BufferDesc{"a_Color", VertexFormat::UByte4Norm,
                                     sizeof(float) * count.num_total_indexes},
         BufferDesc{"a_Color", VertexFormat::UByte4Norm,
@@ -3858,7 +3859,7 @@ static bool OptimizeLinesToVBOIndexed(const CGO* I, CGO* cgo,
   if (ok) {
     auto fmt = GetNormalColorFormatSize(I->G);
 
-    VertexBuffer* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBuffer>();
+    auto* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBufferGL>();
     ok &= vbo->bufferData({
         BufferDesc{"a_Vertex", VertexFormat::Float3,
             sizeof(float) * count.num_total_vertices_lines * 3, vertexVals},
@@ -3868,7 +3869,7 @@ static bool OptimizeLinesToVBOIndexed(const CGO* I, CGO* cgo,
             count.num_total_vertices_lines * fmt.colorSize, colorVals},
     });
 
-    IndexBuffer* ibo = I->G->ShaderMgr->newGPUBuffer<IndexBuffer>();
+    auto* ibo = I->G->ShaderMgr->newGPUBuffer<IndexBufferGL>();
     ok &= ibo->bufferData({BufferDesc(nullptr, VertexFormat::UInt,
         sizeof(VertexIndex_t) * count.num_total_indexes_lines,
         vertexIndexes.data())});
@@ -3876,8 +3877,8 @@ static bool OptimizeLinesToVBOIndexed(const CGO* I, CGO* cgo,
     size_t vboid = vbo->get_hash_id();
     size_t iboid = ibo->get_hash_id();
 
-    VertexBuffer* pickvbo = I->G->ShaderMgr->newGPUBuffer<VertexBuffer>(
-        buffer_layout::SEQUENTIAL, GL_DYNAMIC_DRAW);
+    auto* pickvbo = I->G->ShaderMgr->newGPUBuffer<VertexBufferGL>(
+        buffer_layout::SEQUENTIAL, MemoryProperty::HostVisible);
     ok &= pickvbo->bufferData({BufferDesc("a_Color", VertexFormat::UByte4Norm,
                                     sizeof(float) * count.num_total_indexes),
         BufferDesc("a_Color", VertexFormat::UByte4Norm,
@@ -4219,7 +4220,7 @@ static bool PopulateGLBufferOptimizedSphereData(const CGO* I, CGO* cgo,
     radiusptr = sphereData.rightUpFlagsUB.data();
   }
 
-  VertexBuffer* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBuffer>();
+  auto* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBufferGL>();
   ok &= vbo->bufferData({
       BufferDesc("a_vertex_radius", VertexFormat::Float4,
           sizeof(float) * sphereData.total_vert * 4, sphereData.vert.data()),
@@ -4231,8 +4232,8 @@ static bool PopulateGLBufferOptimizedSphereData(const CGO* I, CGO* cgo,
   });
   size_t vboid = vbo->get_hash_id();
 
-  VertexBuffer* pickvbo = I->G->ShaderMgr->newGPUBuffer<VertexBuffer>(
-      buffer_layout::SEQUENTIAL, GL_DYNAMIC_DRAW);
+  auto* pickvbo = I->G->ShaderMgr->newGPUBuffer<VertexBufferGL>(
+      buffer_layout::SEQUENTIAL, MemoryProperty::HostVisible);
   ok &= pickvbo->bufferData({BufferDesc("a_Color", VertexFormat::UByte4Norm, 0),
                                 BufferDesc("a_Color", VertexFormat::UByte4Norm,
                                     sizeof(float) * sphereData.total_vert)},
@@ -4323,7 +4324,7 @@ CGO* CGOOptimizeBezier(const CGO* I)
 {
   auto cgo = std::make_unique<CGO>(I->G);
   int num_splines = CGOCountNumberOfOperationsOfType(I, CGO_BEZIER);
-  auto vbo = I->G->ShaderMgr->newGPUBuffer<VertexBuffer>();
+  auto vbo = I->G->ShaderMgr->newGPUBuffer<VertexBufferGL>();
   std::vector<float> vertData;
   vertData.reserve(num_splines * CGO_BEZIER_SZ);
   for (auto it = I->begin(); !it.is_stop(); ++it) {
@@ -4903,7 +4904,7 @@ CGO* CGOOptimizeTextures(const CGO* I, int est)
       ok &= !I->G->Interrupt;
     }
     if (ok) {
-      VertexBuffer* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBuffer>(
+      auto* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBufferGL>(
           buffer_layout::SEQUENTIAL);
       ok &= vbo->bufferData(
           {BufferDesc("attr_worldpos", VertexFormat::Float3,
@@ -5140,7 +5141,7 @@ CGO* CGOOptimizeLabels(const CGO* I, int est, bool addshaders)
     }
     if (ok) {
       // Static Vertex Data
-      VertexBuffer* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBuffer>(
+      auto* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBufferGL>(
           buffer_layout::SEQUENTIAL);
       ok &=
           vbo->bufferData({BufferDesc("attr_worldpos", VertexFormat::Float3,
@@ -5157,8 +5158,8 @@ CGO* CGOOptimizeLabels(const CGO* I, int est, bool addshaders)
                   sizeof(float) * num_total_labels * 6, relativeMode)});
       size_t vboid = vbo->get_hash_id();
 
-      VertexBuffer* pickvbo = I->G->ShaderMgr->newGPUBuffer<VertexBuffer>(
-          buffer_layout::SEQUENTIAL, GL_DYNAMIC_DRAW);
+      auto* pickvbo = I->G->ShaderMgr->newGPUBuffer<VertexBufferGL>(
+          buffer_layout::SEQUENTIAL, MemoryProperty::HostVisible);
       ok &= pickvbo->bufferData(
           {BufferDesc("attr_pickcolor", VertexFormat::UByteNorm, 0),
               BufferDesc("attr_pickcolor", VertexFormat::UByteNorm,
@@ -5311,7 +5312,7 @@ CGO* CGOOptimizeConnectors(const CGO* I, int est)
     }
     if (ok) {
       const size_t quant = factor * num_total_connectors;
-      VertexBuffer* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBuffer>();
+      auto* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBufferGL>();
       ok = vbo->bufferData({BufferDesc("a_target_pt3d", VertexFormat::Float3,
                                 sizeof(float) * 3 * quant, targetPt3d.data()),
           BufferDesc("a_center_pt3d", VertexFormat::Float3,
@@ -7499,7 +7500,7 @@ CGO* CGOOptimizeScreenTexturesAndPolygons(CGO* I, int est)
         G, I, vertexVals, texcoordVals, colorVals, colorValsUC);
     RETURN_VAL_IF_FAIL(ok && !G->Interrupt, nullptr);
     if (ok) {
-      VertexBuffer* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBuffer>();
+      auto* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBufferGL>();
       ok = vbo->bufferData(
           {BufferDesc("attr_screenoffset", VertexFormat::Float3,
                sizeof(float) * num_total_indices * 3, vertexVals),
@@ -9056,11 +9057,11 @@ CGO* CGOConvertToShader(const CGO* I, AttribDataDesc& attrData,
   // - pickvbo is interleaved so that for multiple channels, pick data for each
   // vertex
   //   is contiguous
-  VertexBuffer* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBuffer>(layout);
-  VertexBuffer* pickvbo = nullptr;
+  auto* vbo = I->G->ShaderMgr->newGPUBuffer<VertexBufferGL>(layout);
+  VertexBufferGL* pickvbo = nullptr;
   if (pickDataSize) {
-    pickvbo = I->G->ShaderMgr->newGPUBuffer<VertexBuffer>(
-        buffer_layout::SEQUENTIAL, GL_DYNAMIC_DRAW);
+    pickvbo = I->G->ShaderMgr->newGPUBuffer<VertexBufferGL>(
+        buffer_layout::SEQUENTIAL, MemoryProperty::HostVisible);
     pickvbohash = pickvbo->get_hash_id();
   }
 
@@ -9114,7 +9115,7 @@ CGO* CGOConvertToShader(const CGO* I, AttribDataDesc& attrData,
       }
       vpl += nvertsperindivfrag;
     }
-    IndexBuffer* ibo = I->G->ShaderMgr->newGPUBuffer<IndexBuffer>();
+    auto* ibo = I->G->ShaderMgr->newGPUBuffer<IndexBufferGL>();
     ok &= ibo->bufferData({BufferDesc(nullptr, VertexFormat::UInt,
         sizeof(VertexIndex_t) * num_total_indexes, vertexIndices.data())});
     iboid = ibo->get_hash_id();

@@ -647,7 +647,7 @@ static size_t createColorTexture(PyMOLGlobals * G, const float *colors, const in
 {
   size_t texname = 0;
 #ifndef PURE_OPENGL_ES_2
-  auto tex = G->ShaderMgr->newGPUBuffer<textureBuffer_t>(
+  auto tex = G->ShaderMgr->newGPUBuffer<TextureGL>(
     tex::format::RGBA,
     tex::data_type::FLOAT,
     tex::filter::LINEAR,
@@ -702,7 +702,7 @@ static size_t createPreintegrationTexture(PyMOLGlobals * G, const float *Table, 
   }
 
   // upload texture
-  auto tex = G->ShaderMgr->newGPUBuffer<textureBuffer_t>(
+  auto tex = G->ShaderMgr->newGPUBuffer<TextureGL>(
     tex::format::RGBA,
     tex::data_type::FLOAT,
     tex::filter::NEAREST,
@@ -846,7 +846,7 @@ void ObjectVolume::render(RenderInfo * info)
       }
 
       auto tex3dGenBind = [](PyMOLGlobals * G, tex::data_type dtype) -> size_t {
-        auto texture = G->ShaderMgr->newGPUBuffer<textureBuffer_t>(
+        auto texture = G->ShaderMgr->newGPUBuffer<TextureGL>(
           tex::format::R,
           dtype,
           tex::filter::LINEAR,
@@ -860,13 +860,13 @@ void ObjectVolume::render(RenderInfo * info)
       };
       // Create a 3D texture
       vs->textures[0] = tex3dGenBind(G, volume_bit_depth);
-      auto t0 = G->ShaderMgr->getGPUBuffer<textureBuffer_t>(vs->textures[0]);
+      auto t0 = G->ShaderMgr->getGPUBuffer<TextureGL>(vs->textures[0]);
       t0->texture_data_3D(field->dim[2], field->dim[1], field->dim[0], field->data.data());
 
       // Create 3D carve mask texture
       if(vs->carvemask) {
         vs->textures[2] = tex3dGenBind(G, tex::data_type::UBYTE);
-        auto t2 = G->ShaderMgr->getGPUBuffer<textureBuffer_t>(vs->textures[2]);
+        auto t2 = G->ShaderMgr->getGPUBuffer<TextureGL>(vs->textures[2]);
         t2->texture_data_3D(
           vs->carvemask->dim[2],
           vs->carvemask->dim[1],

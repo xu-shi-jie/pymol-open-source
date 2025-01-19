@@ -459,7 +459,7 @@ static void CGOReorderIndicesWithTransparentInfo(PyMOLGlobals* G, int nindices,
     VertexIndex_t* vertexIndices)
 {
   int c, pl, idx;
-  IndexBuffer* ibo = G->ShaderMgr->getGPUBuffer<IndexBuffer>(vbuf);
+  auto* ibo = G->ShaderMgr->getGPUBuffer<IndexBufferGL>(vbuf);
   if (!vertexIndices) {
     PRINTFB(G, FB_RepSurface, FB_Errors)
     "ERROR: RepSurfaceRender() vertexIndices is not set, nindices=%d\n",
@@ -481,8 +481,8 @@ static void CGO_gl_draw_buffers_indexed(CCGORenderer* I, CGO_op_data pc)
   int mode = sp->mode, nindices = sp->nindices, nverts = sp->nverts,
       n_data = sp->n_data;
   size_t vboid = sp->vboid, iboid = sp->iboid;
-  VertexBuffer* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(vboid);
-  IndexBuffer* ibo = I->G->ShaderMgr->getGPUBuffer<IndexBuffer>(iboid);
+  auto* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(vboid);
+  auto* ibo = I->G->ShaderMgr->getGPUBuffer<IndexBufferGL>(iboid);
   CheckGLErrorOK(I->G, "beginning of CGO_gl_draw_buffers_indexed err=%d\n");
 
   auto shaderPrg = I->G->ShaderMgr->Get_Current_Shader();
@@ -498,8 +498,8 @@ static void CGO_gl_draw_buffers_indexed(CCGORenderer* I, CGO_op_data pc)
     shaderPrg->Set1i("lighting_enabled", 0);
     if (I->use_shader) {
       if (sp->pickvboid) {
-        VertexBuffer* pickvbo =
-            I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->pickvboid);
+        auto* pickvbo =
+            I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->pickvboid);
         pickvbo->bind(shaderPrg->id, I->pick_pass());
       } else {
         glEnableVertexAttribArray(attr_a_Color);
@@ -547,8 +547,8 @@ static void CGO_gl_draw_buffers_indexed(CCGORenderer* I, CGO_op_data pc)
   ibo->unbind();
 
   if (I->isPicking) {
-    VertexBuffer* pickvbo =
-        I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->pickvboid);
+    auto* pickvbo =
+        I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->pickvboid);
     if (pickvbo)
       pickvbo->unbind();
   }
@@ -566,7 +566,7 @@ static void CGO_gl_draw_buffers_not_indexed(CCGORenderer* I, CGO_op_data pc)
   if (!shaderPrg) {
     return;
   }
-  VertexBuffer* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->vboid);
+  auto* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->vboid);
   if (!vbo)
     return;
   if (I->isPicking) {
@@ -576,8 +576,8 @@ static void CGO_gl_draw_buffers_not_indexed(CCGORenderer* I, CGO_op_data pc)
     shaderPrg->Set1i("lighting_enabled", 0);
     if (I->use_shader) {
       if (sp->pickvboid) {
-        VertexBuffer* pickvbo =
-            I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->pickvboid);
+        auto* pickvbo =
+            I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->pickvboid);
         pickvbo->bind(shaderPrg->id, I->pick_pass());
       } else {
         glEnableVertexAttribArray(attr_a_Color);
@@ -596,8 +596,8 @@ static void CGO_gl_draw_buffers_not_indexed(CCGORenderer* I, CGO_op_data pc)
   vbo->unbind();
 
   if (I->isPicking) {
-    VertexBuffer* pickvbo =
-        I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->pickvboid);
+    auto* pickvbo =
+        I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->pickvboid);
     if (pickvbo)
       pickvbo->unbind();
   }
@@ -612,7 +612,7 @@ static void CGO_gl_mask_attribute_if_picking(CCGORenderer* I, CGO_op_data pc)
     if (!shaderPrg) {
       return;
     }
-    VertexBuffer* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->vboid);
+    auto* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->vboid);
     if (!vbo)
       return;
     int loc = shaderPrg->GetAttribLocation(
@@ -630,7 +630,7 @@ static void CGO_gl_bind_vbo_for_picking(CCGORenderer* I, CGO_op_data pc)
     if (!shaderPrg) {
       return;
     }
-    VertexBuffer* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->vboid);
+    auto* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->vboid);
     if (!vbo)
       return;
     vbo->bind(
@@ -646,12 +646,12 @@ static void CGO_gl_draw_custom(CCGORenderer* I, CGO_op_data pc)
   if (!shaderPrg) {
     return;
   }
-  VertexBuffer* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->vboid);
+  auto* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->vboid);
   if (!vbo)
     return;
-  IndexBuffer* ibo = nullptr;
+  IndexBufferGL* ibo = nullptr;
   if (sp->iboid) {
-    ibo = I->G->ShaderMgr->getGPUBuffer<IndexBuffer>(sp->iboid);
+    ibo = I->G->ShaderMgr->getGPUBuffer<IndexBufferGL>(sp->iboid);
   }
   vbo->bind(shaderPrg->id);
   if (ibo) {
@@ -662,8 +662,8 @@ static void CGO_gl_draw_custom(CCGORenderer* I, CGO_op_data pc)
   }
   vbo->unbind();
   if (sp->pickvboid) {
-    VertexBuffer* pickvbo =
-        I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->pickvboid);
+    auto* pickvbo =
+        I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->pickvboid);
     if (pickvbo)
       pickvbo->unbind();
   }
@@ -676,9 +676,9 @@ static void CGO_gl_draw_sphere_buffers(CCGORenderer* I, CGO_op_data pc)
   const cgo::draw::sphere_buffers* sp = reinterpret_cast<decltype(sp)>(*pc);
   int num_spheres = sp->num_spheres;
   int attr_color;
-  VertexBuffer* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->vboid);
-  VertexBuffer* pickvbo =
-      I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->pickvboid);
+  auto* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->vboid);
+  auto* pickvbo =
+      I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->pickvboid);
   CShaderPrg* shaderPrg;
   int pickable = 0;
 
@@ -718,7 +718,7 @@ static void CGO_gl_draw_bezier_buffers(CCGORenderer* I, CGO_op_data cgo_data)
 {
   const auto bezier =
       reinterpret_cast<const cgo::draw::bezier_buffers*>(*cgo_data);
-  const auto vbo = I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(bezier->vboid);
+  const auto vbo = I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(bezier->vboid);
   auto shaderPrg = I->G->ShaderMgr->Get_BezierShader();
   if (!shaderPrg) {
     return;
@@ -737,10 +737,10 @@ static void CGO_gl_draw_cylinder_buffers(CCGORenderer* I, CGO_op_data pc)
   int attr_colors, attr_colors2;
   CShaderPrg* shaderPrg;
   int pickable = 0;
-  VertexBuffer* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->vboid);
-  IndexBuffer* ibo = I->G->ShaderMgr->getGPUBuffer<IndexBuffer>(sp->iboid);
-  VertexBuffer* pickvbo =
-      I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->pickvboid);
+  auto* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->vboid);
+  auto* ibo = I->G->ShaderMgr->getGPUBuffer<IndexBufferGL>(sp->iboid);
+  auto* pickvbo =
+      I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->pickvboid);
 
   shaderPrg = I->G->ShaderMgr->Get_CylinderShader(
       I->info ? I->info->pass : RenderPass::Antialias);
@@ -828,9 +828,9 @@ static void CGO_gl_draw_labels(CCGORenderer* I, CGO_op_data pc)
     return;
   }
 
-  VertexBuffer* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->vboid);
-  VertexBuffer* pickvbo =
-      I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->pickvboid);
+  auto* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->vboid);
+  auto* pickvbo =
+      I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->pickvboid);
 
   if (I->isPicking) {
     pickvbo->bind(shaderPrg->id, I->pick_pass());
@@ -896,7 +896,7 @@ static void CGO_gl_draw_connectors(CCGORenderer* I, CGO_op_data pc)
     glLineWidth(lineWidth);
 #endif
 
-  VertexBuffer* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->vboid);
+  auto* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->vboid);
   if (!vbo)
     return;
   vbo->bind(shaderPrg->id);
@@ -909,7 +909,7 @@ static void CGO_gl_draw_textures(CCGORenderer* I, CGO_op_data pc)
 {
   const cgo::draw::textures* sp = reinterpret_cast<decltype(sp)>(*pc);
   int ntextures = sp->ntextures;
-  VertexBuffer* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->vboid);
+  auto* vbo = I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->vboid);
   CShaderPrg* shaderPrg;
   int attr_pickcolor = 0;
   shaderPrg = I->G->ShaderMgr->Get_LabelShader(
@@ -946,7 +946,7 @@ static void CGO_gl_draw_screen_textures_and_polygons(
     return;
   }
 
-  VertexBuffer* vb = I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(sp->vboid);
+  auto* vb = I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(sp->vboid);
   if (!vb)
     return;
   vb->bind(shaderPrg->id);
@@ -2106,8 +2106,8 @@ void CGORenderGLPicking(CGO* I, RenderInfo* info, PickContext* context,
 
         if (pickvbo) {
           // reload entire vbo
-          VertexBuffer* vbo =
-              I->G->ShaderMgr->getGPUBuffer<VertexBuffer>(pickvbo);
+          auto* vbo =
+              I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(pickvbo);
           vbo->bufferReplaceData(destOffset,
               sizeof(float) * nverts * bufsizemult, pickColorDestUC);
           (*pickcolors_are_set_ptr) = true;
