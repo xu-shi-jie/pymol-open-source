@@ -2281,7 +2281,6 @@ std::vector<int> TrianglePointsToSurface(PyMOLGlobals* G, float* v, float* vn,
     int n, float cutoff, int* nTriPtr, std::vector<int>& stripPtr, float* extent,
     int cavity_mode)
 {
-  TriangleSurfaceRec *I = nullptr;
   int ok = true;
   std::vector<int> result;
   MapType *map;
