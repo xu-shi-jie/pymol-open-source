@@ -15,7 +15,7 @@ typedef struct {
   ov_size size;
 } lex_entry;
 
-struct _OVLexicon {
+struct OVLexicon {
   OVHeap *heap;
   OVOneToOne *up;               /* maps hash_key to index of first zero-based entry */
   lex_entry *entry;             /* maintained as a 1-based index */

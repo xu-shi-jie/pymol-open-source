@@ -4591,7 +4591,7 @@ int SceneRovingCheckDirty(PyMOLGlobals * G)
   return (I->RovingDirtyFlag);
 }
 
-struct _CObjectUpdateThreadInfo {
+struct CObjectUpdateThreadInfo {
   pymol::CObject *obj;
 };
 

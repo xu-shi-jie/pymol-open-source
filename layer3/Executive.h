@@ -139,12 +139,8 @@ enum cLoadType_t : int {
    ExecutiveLoad
 */
 
-struct ExecutiveObjectOffset{
-  ObjectMolecule *obj;
-  int atm;
-};
-
 class SpecRec;
+struct ExecutiveObjectOffset;
 
 /**
  * Iterator over objects (uses SpecRec list)
