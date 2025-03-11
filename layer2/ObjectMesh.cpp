@@ -1122,6 +1122,11 @@ static CGO* ObjectMeshRenderImpl(
           return cgo;
         }
       }
+
+      if (!ms->shaderCGO) {
+        return nullptr;
+      }
+
       ok &= ObjectMeshStateRenderShader(ms, I, info);
 
       if (!ok) {
