@@ -1201,6 +1201,7 @@ PyMOLreturn_status PyMOL_CmdBackgroundColor(CPyMOL * I, const char *value) {
   int idx = ColorGetIndex(I->G, value);
   if(idx >= 0){
     SettingSetGlobal_i(I->G, cSetting_bg_rgb, idx);
+    SettingGenerateSideEffects(I->G, cSetting_bg_rgb, nullptr, -1, 0);
   } else {
     ErrMessage(I->G, "Color", "Bad color name.");
   }
