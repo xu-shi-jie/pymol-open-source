@@ -548,6 +548,8 @@ pymol_src_dirs = [
     "layer3",
     "layer4",
     "layer5",
+    "layerGraphics",
+    "layerGraphics/gl",
     generated_dir,
 ]
 

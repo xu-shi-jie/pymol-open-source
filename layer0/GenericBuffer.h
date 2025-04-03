@@ -1,58 +1,14 @@
 #pragma once
 // -----------------------------------------------------------------------------
+#include "GPUEnums.h"
+#include "GPUVertexDesc.h"
 #include "Vector.h"
 #include <vector>
 #include <tuple>
-#include <map>
 #include <array>
 #include <type_traits>
 #include <cstdlib>
-#include <string.h>
 #include <glm/vec2.hpp>
-
-enum class VertexFormat {
-  // 8 bit
-  Byte,
-  Byte2,
-  Byte3,
-  Byte4,
-  ByteNorm,
-  Byte2Norm,
-  Byte3Norm,
-  Byte4Norm,
-  UByte,
-  UByte2,
-  UByte3,
-  UByte4,
-  UByteNorm,
-  UByte2Norm,
-  UByte3Norm,
-  UByte4Norm,
-
-  //Single Precision
-  Float,
-  Float2,
-  Float3,
-  Float4,
-
-  // 32 bit
-  Int,
-  Int2,
-  Int3,
-  Int4,
-  UInt,
-  UInt2,
-  UInt3,
-  UInt4,
-};
-
-enum class VertexFormatBaseType { Byte, UByte, Float, Int, UInt };
-
-/**
- * @param format Vertex format
- * @return The base type of the vertex format
-*/
-VertexFormatBaseType GetVertexFormatBaseType(VertexFormat format);
 
 /**
  * @param format Vertex format
@@ -68,47 +24,9 @@ GLint VertexFormatToGLSize(VertexFormat format);
 
 /**
  * @param format Vertex format
- * @return Whether the vertex format is a normalized type
-*/
-bool VertexFormatIsNormalized(VertexFormat format);
-
-/**
- * @param format Vertex format
  * @return Whether the vertex format is a normalized type as a GLboolean
 */
 GLboolean VertexFormatToGLNormalized(VertexFormat format);
-
-/**
- * @param format Vertex format
- * @return The size of the vertex format in bytes
-*/
-std::size_t GetSizeOfVertexFormat(VertexFormat format);
-
-
-// -----------------------------------------------------------------------------
-// DESCRIPTORS
-// -----------------------------------------------------------------------------
-// Describes a single array held in the vbo
-struct BufferDesc {
-  BufferDesc(const char* _attr_name, VertexFormat _format,
-      std::size_t _data_size = 0, const void* _data_ptr = nullptr,
-      std::uint32_t offset = 0)
-      : attr_name(_attr_name)
-      , m_format(_format)
-      , data_size(_data_size)
-      , data_ptr(_data_ptr)
-      , offset(offset)
-  {
-  }
-
-  const char* attr_name{nullptr};
-  VertexFormat m_format{VertexFormat::Float};
-  std::size_t data_size{};
-  const void* data_ptr{nullptr};
-  std::uint32_t offset{};
-};
-
-using BufferDataDesc = std::vector< BufferDesc >;
 
 /* different types of AttribOp */
 enum attrib_op_type {
@@ -242,186 +160,6 @@ protected:
   virtual void set_hash_id(size_t id) { _hashid = id; }
 private:
   size_t _hashid { 0 };
-};
-
-enum class buffer_layout {
-  SEPARATE,   // multiple vbos
-  SEQUENTIAL, // single vbo
-  INTERLEAVED // single vbo
-};
-
-enum class MemoryProperty {
-  DeviceLocal,
-  HostVisible,
-};
-
-// -----------------------------------------------------------------------------
-/* Vertexbuffer rules:
- * -----------------------------------------------------------------------------
- * - If the buffer data is interleaved then buffer sub data functionality cannot
- *   be used.
- * - The same order of buffer data must be maintained when uploading and binding
- *
- *-----------------------------------------------------------------------
- * USAGE_PATTERN:
- * SEPARATE:
- *   vbo1 [ data1 ]
- *   vbo2 [ data2 ]
- *   ...
- *   vboN [ dataN ]
- * SEQUENTIAL:
- *   vbo [ data1 | data2 | ... | dataN ]
- * INTERLEAVED:
- *   vbo [ data1[0], data2[0], ..., dataN[0] | ... | data1[M], data2[M], ..., dataN[M] ]
- */
-class GenericBuffer : public GPUBuffer
-{
-  friend class CShaderMgr;
-
-public:
-  GenericBuffer(buffer_layout layout = buffer_layout::SEPARATE,
-      MemoryProperty properties = MemoryProperty::DeviceLocal);
-  GenericBuffer(const GenericBuffer&) = delete;
-  GenericBuffer& operator=(const GenericBuffer&) = delete;
-  GenericBuffer(GenericBuffer&&) = delete;
-  GenericBuffer& operator=(GenericBuffer&&) = delete;
-  ~GenericBuffer();
-
-  /**
-   * Conditionally generates a GPU buffer for the given data descriptor
-   * @param desc The buffer data descriptor
-   * @return Whether the buffer data was successfully buffered
-   * @note The supplied data ptr in the struct can
-   * be zero, in which case if the default usage is STATIC_DRAW then no
-   * opengl buffer will be generated for that, else it is assumed that the
-   * data will be supplied at a later point because it's dynamic draw.
-   */
-  bool bufferData(BufferDataDesc&& desc);
-
-  /**
-   * Generates a GPU buffer for the given data descriptor
-   * @param desc The buffer data descriptor
-   * @param data The data to buffer
-   * @param len The length of the data
-   * @param stride The stride of the data
-   * @note assumes the data is interleaved
-   */
-  bool bufferData(
-      BufferDataDesc&& desc, const void* data, size_t len, size_t stride);
-
-  // -----------------------------------------------------------------------------
-
-  /**
-   * Updates (a portion of) the buffer data
-   * @param offset The offset to start updating the buffer data
-   * @param size The size of the data to update
-   * @param data The data to update
-   * @param index The index of the buffer data to update
-   * @note This function assumes that the data layout hasn't changed
-  */
-  void bufferSubData(size_t offset, size_t size, void* data, size_t index = 0);
-
-  /**
-   * Replaces the whole interleaved buffer data
-   * @param data The data to replace the buffer data with
-   * @param len The length of the data
-   * @param data The data to replace the buffer data with
-   * @note This function assumes that the data layout hasn't changed
-   */
-  void bufferReplaceData(size_t offset, size_t len, const void* data);
-
-  const BufferDataDesc& getVertDesc() const;
-
-protected:
-
-  /**
-   * Generates GPU buffer(s) for the given data descriptor
-   * @return Whether the buffer data was successfully buffered
-   */
-  bool evaluate();
-
-  // USAGE PATTERNS
-
-  /**
-   * Generates a separate buffer for each data descriptor
-   * @return Whether the buffer data was successfully buffered
-   */
-  bool sepBufferData();
-
-  /**
-   * Generates a single sequential buffer for all data descriptors
-   * @return Whether the buffer data was successfully buffered
-   */
-  bool seqBufferData();
-
-  /**
-   * Generates a single interleaved buffer for all data descriptors
-   * @return Whether the buffer data was successfully buffered
-   */
-  bool interleaveBufferData();
-
-  /**
-   * Generates an OpenGL buffer with given size and data
-   * @param id The OpenGL buffer ID
-   * @param size The size of the buffer
-   * @param ptr The data to buffer
-   * @return Whether the buffer was successfully generated
-   */
-  bool genBuffer(GLuint& id, size_t size, const void* ptr);
-
-  /**
-   * @return OpenGL buffer type
-   */
-  virtual GLenum bufferType() const = 0;
-
-protected:
-  bool m_status{false};
-  bool m_interleaved{false};
-  GLuint m_interleavedID{0};
-  MemoryProperty m_memProperty{MemoryProperty::DeviceLocal};
-  const buffer_layout m_layout{ buffer_layout::SEPARATE };
-  size_t m_stride{0};
-  BufferDataDesc m_desc;
-  std::vector<GLuint> desc_glIDs; // m_desc's gl buffer IDs
-};
-
-/**
- * Vertex buffer specialization
- */
-class VertexBufferGL : public GenericBuffer {
-  void bind_attrib(GLuint prg, const BufferDesc& d, GLuint glID);
-
-public:
-  VertexBufferGL(buffer_layout layout = buffer_layout::SEPARATE,
-      MemoryProperty property = MemoryProperty::DeviceLocal);
-
-  void bind() const override;
-
-  void bind(GLuint prg, int index = -1);
-
-  void unbind();
-
-  void maskAttributes(std::vector<GLint> attrib_locs);
-  void maskAttribute(GLint attrib_loc);
-
-  GLenum bufferType() const override;
-
-private:
-  // m_locs is only for interleaved data
-  std::vector<GLint> m_locs;
-  std::vector<GLint> m_attribmask;
-};
-
-/**
- * Index buffer specialization
- */
-class IndexBufferGL : public GenericBuffer {
-public:
-  using GenericBuffer::GenericBuffer;
-
-  void bind() const override;
-  void unbind();
-  GLenum bufferType() const override;
 };
 
 // Forward Decls

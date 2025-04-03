@@ -5,6 +5,7 @@
 #include "CGORenderer.h"
 #include "CoordSet.h"
 #include "Feedback.h"
+#include "GLVertexBuffer.h"
 #include "GraphicsUtil.h"
 #include "Scene.h"
 #include "SceneDef.h"
@@ -472,7 +473,7 @@ static void CGOReorderIndicesWithTransparentInfo(PyMOLGlobals* G, int nindices,
     vertexIndices[pl++] = vertexIndicesOriginal[idx + 1];
     vertexIndices[pl++] = vertexIndicesOriginal[idx + 2];
   }
-  ibo->bufferSubData(0, sizeof(VertexIndex_t) * nindices, vertexIndices);
+  ibo->copyFrom(pymol::span{vertexIndices, static_cast<std::size_t>(nindices)});
 }
 
 static void CGO_gl_draw_buffers_indexed(CCGORenderer* I, CGO_op_data pc)
@@ -2108,8 +2109,11 @@ void CGORenderGLPicking(CGO* I, RenderInfo* info, PickContext* context,
           // reload entire vbo
           auto* vbo =
               I->G->ShaderMgr->getGPUBuffer<VertexBufferGL>(pickvbo);
-          vbo->bufferReplaceData(destOffset,
-              sizeof(float) * nverts * bufsizemult, pickColorDestUC);
+          auto pickPtrBytes =
+              reinterpret_cast<const std::byte*>(pickColorDestUC);
+          auto dataSpan =
+              pymol::span{pickPtrBytes, sizeof(float) * nverts * bufsizemult};
+          vbo->bufferReplaceData(destOffset, dataSpan);
           (*pickcolors_are_set_ptr) = true;
         }
 
