@@ -69,6 +69,19 @@ struct VItemType {
   float bg_color[3];       // 23-25: label_bg_color
   float connector_width;   // 26: label_connector_width
   float connector_ext_len; // 27: label_connector_ext_length
+
+  /**
+   * @return relative mode flags
+   */
+  short getRelativeMode() const noexcept
+  {
+    return static_cast<short>(relativeMode_f);
+  }
+
+  /**
+   * @return draw var flags (7 bits; see draw_var_f)
+   */
+  int getDrawVar() const noexcept { return 127 & static_cast<int>(draw_var_f); }
 };
 
 struct RepLabel : Rep {
@@ -79,24 +92,19 @@ struct RepLabel : Rep {
   cRep_t type() const override { return cRepLabel; }
   void render(RenderInfo* info) override;
 
-  // VItemType *V;
-  float* V = nullptr;
-  lexidx_t* L = nullptr;
+  std::vector<VItemType> labelV;
+  std::vector<lexidx_t> L;
   int N;
   int OutlineColor;
   CGO* shaderCGO = nullptr;
   int texture_font_size = 0;
 };
 
-#define SHADERCGO I->shaderCGO
-
 #include "ObjectMolecule.h"
 
 RepLabel::~RepLabel()
 {
   auto I = this;
-  FreeP(I->V);
-  FreeP(I->L);
   CGOFree(I->shaderCGO);
 }
 
@@ -1219,30 +1227,28 @@ static void RepLabelRenderRay(RepLabel* I, RenderInfo* info)
 #ifndef _PYMOL_NO_RAY
   PyMOLGlobals* G = I->G;
   CRay* ray = info->ray;
-  int c = I->N;
-  float* v = I->V;
-  lexidx_t* l = I->L;
   int font_id = SettingGet_i(
       G, I->cs->Setting.get(), I->obj->Setting.get(), cSetting_label_font_id);
   float font_size = SettingGet_f(
       G, I->cs->Setting.get(), I->obj->Setting.get(), cSetting_label_size);
-  if (c) {
-    const char* st;
+  if (I->N != 0) {
     TextSetOutlineColor(G, I->OutlineColor);
-    while (c--) {
-      if (*l) {
+    for (int c = 0; c < I->N; c++) {
+      auto& l = I->L[c];
+      if (l) {
         float xn[3], yn[3], tCenter[3], offpt[3];
-        short relativeMode = ((short) *(v + 15));
-        int draw_var = 127 & (int) *(v + 21);
+        auto relativeMode = I->labelV[c].getRelativeMode();
+        auto draw_var = I->labelV[c].getDrawVar();
 
-        copy3f(v + 6, tCenter);
+        std::copy_n(I->labelV[c].screen_point, 3, tCenter);
         SceneGetCenter(G, offpt);
         RayGetScaledAxes(ray, xn, yn);
 
-        st = LexStr(G, *l);
-        TextSetLabelBkgrdInfo(G, *(v + 16), *(v + 17), (v + 18));
+        auto st = LexStr(G, l);
+        TextSetLabelBkgrdInfo(G, I->labelV[c].spacing,
+            I->labelV[c].justification, I->labelV[c].padding);
         if (relativeMode & 8) { // label_z_target, adjust z to target
-          TextGetLabelPos(G)[0] = (SceneGetDepth(G, v + 3) - .5) * 2.f;
+          TextGetLabelPos(G)[0] = (SceneGetDepth(G, I->labelV[c].coord) - .5) * 2.f;
           TextSetLabelPosIsSet(G, 1);
         } else if (relativeMode & 6) { // label_relative_mode 1 or 2, i.e.,
                                        // screen stabilized, adjust z
@@ -1264,15 +1270,14 @@ static void RepLabelRenderRay(RepLabel* I, RenderInfo* info)
           TextSetLabelPosIsSet(G, 0);
         }
 
-        TextSetPosNColor(G, tCenter, v);
+        TextSetPosNColor(G, tCenter, I->labelV[c].color);
 
-        TextRenderRay(G, ray, font_id, st, font_size, v + 12,
-            (draw_var ? 1 : 0), ((short) *(v + 15)));
+        TextRenderRay(G, ray, font_id, st, font_size, I->labelV[c].position,
+            (draw_var ? 1 : 0), I->labelV[c].getRelativeMode());
         if (draw_var) {
-          RepLabelRenderRayBackground(I, info, v, draw_var);
+          RepLabelRenderRayBackground(I, info, I->labelV[c].color, draw_var);
         }
       }
-      v += 28;
       l++;
     }
   }
@@ -1284,9 +1289,6 @@ void RepLabel::render(RenderInfo* info)
   auto I = this;
   CRay* ray = info->ray;
   auto pick = info->pick;
-  float* v = I->V;
-  int c = I->N;
-  lexidx_t* l = I->L;
   int font_id = SettingGet_i(
       G, I->cs->Setting.get(), I->obj->Setting.get(), cSetting_label_font_id);
   float font_size = SettingGet_f(
@@ -1319,34 +1321,37 @@ void RepLabel::render(RenderInfo* info)
       if (!pick_labels)
         return;
       if (I->shaderCGO) {
-        if (float_text)
+        if (float_text) {
           glDisable(GL_DEPTH_TEST);
+        }
         CGORenderPicking(I->shaderCGO, info, &I->context, I->cs->Setting.get(),
             I->obj->Setting.get());
-        if (float_text)
+        if (float_text) {
           glEnable(GL_DEPTH_TEST);
+        }
         return;
       } else {
         Pickable* p = I->P;
         TextSetIsPicking(G, true);
         SceneSetupGLPicking(G);
-        if (c) {
-          const char* st;
+        if (I->N != 0) {
           int screenwidth, screenheight;
-          if (float_text)
+          if (float_text) {
             glDisable(GL_DEPTH_TEST);
+          }
 
           if (!I->shaderCGO) {
             SceneGetWidthHeight(G, &screenwidth, &screenheight);
           }
 
-          while (c--) {
-            if (*l) {
+          for (int c = 0; c < I->N; c++) {
+            auto& l = I->L[c];
+            if (l) {
               float xn[3], yn[3], tCenterPt[3], offpt[3];
-              short relativeMode = ((short) *(v + 15));
-              copy3f(v + 6, tCenterPt);
+              auto relativeMode = I->labelV[c].getRelativeMode();
+              std::copy_n(I->labelV[c].screen_point, 3, tCenterPt);
               SceneGetCenter(G, offpt);
-              TextSetPosNColor(G, offpt, v);
+              TextSetPosNColor(G, offpt, I->labelV[c].color);
               SceneGetScaledAxes(G, I->obj, xn, yn);
               if (!I->shaderCGO) {
                 if (relativeMode & 2) { // label_relative_mode = 1
@@ -1365,9 +1370,10 @@ void RepLabel::render(RenderInfo* info)
                   copy3f(offpt, tCenterPt);
                 }
               }
-              TextSetPosNColor(G, tCenterPt, v);
-              TextSetTargetPos(G, v + 3);
-              TextSetLabelBkgrdInfo(G, *(v + 16), *(v + 17), (v + 18));
+              TextSetPosNColor(G, tCenterPt, I->labelV[c].color);
+              TextSetTargetPos(G, I->labelV[c].coord);
+              TextSetLabelBkgrdInfo(G, I->labelV[c].spacing,
+                  I->labelV[c].justification, I->labelV[c].padding);
 
               if (p) {
                 p++;
@@ -1377,24 +1383,24 @@ void RepLabel::render(RenderInfo* info)
 
               TextSetColorFromUColor(G);
 
-              st = LexStr(G, *l);
-              if (!TextRenderOpenGL(G, info, font_id, st, font_size, v + 12,
-                      false, (short) *(v + 15), 1, SHADERCGO)) {
+              auto st = LexStr(G, l);
+              if (!TextRenderOpenGL(G, info, font_id, st, font_size,
+                      I->labelV[c].position, false,
+                      I->labelV[c].getRelativeMode(), 1,
+                      I->shaderCGO)) {
                 TextSetIsPicking(G, false);
                 return;
               }
             }
-            l++;
-            v += 28;
           }
-          if (float_text)
+          if (float_text) {
             glEnable(GL_DEPTH_TEST);
+          }
         }
         TextSetIsPicking(G, false);
       }
     } else { // not pick or ray, render
-      if (c) {
-        const char* st;
+      if (I->N != 0) {
         short use_shader, has_connector = 0;
         CGO* connectorCGO = nullptr;
         float* PmvMatrix = nullptr;
@@ -1404,8 +1410,8 @@ void RepLabel::render(RenderInfo* info)
         int pre_use_shaders = info->use_shaders;
 
         Pickable* p = I->P;
-        use_shader = SettingGetGlobal_b(G, cSetting_use_shaders)
-                     && G->ShaderMgr->GeometryShadersPresent();
+        use_shader = SettingGetGlobal_b(G, cSetting_use_shaders) &&
+                     G->ShaderMgr->GeometryShadersPresent();
         info->use_shaders = use_shader;
         if (use_shader) {
           if (!I->shaderCGO) {
@@ -1413,11 +1419,13 @@ void RepLabel::render(RenderInfo* info)
             I->shaderCGO->use_shader = true;
           } else {
             info->texture_font_size = I->texture_font_size;
-            if (float_text)
+            if (float_text) {
               glDisable(GL_DEPTH_TEST);
+            }
             CGORender(I->shaderCGO, nullptr, nullptr, nullptr, info, I);
-            if (float_text)
+            if (float_text) {
               glEnable(GL_DEPTH_TEST);
+            }
             return;
           }
         } else {
@@ -1429,7 +1437,7 @@ void RepLabel::render(RenderInfo* info)
 #endif
         }
         TextSetOutlineColor(G, I->OutlineColor);
-        if (I->shaderCGO && c) {
+        if (I->shaderCGO && I->N) {
           connectorCGO = CGONew(G);
           CGOBegin(connectorCGO, GL_LINES);
         }
@@ -1441,14 +1449,15 @@ void RepLabel::render(RenderInfo* info)
           normalize3f(xn);
           normalize3f(yn);
         }
-        while (c--) {
-          if (*l) {
+        for (int c = 0; c < I->N; c++) {
+          auto& l = I->L[c];
+          if (l) {
             float tCenterPt[3], offpt[3];
-            short relativeMode = ((short) *(v + 15));
-            int draw_var = 127 & (int) *(v + 21);
-            copy3f(v + 6, tCenterPt);
+            auto relativeMode = I->labelV[c].getRelativeMode();
+            auto draw_var = I->labelV[c].getDrawVar();
+            std::copy_n(I->labelV[c].screen_point, 3, tCenterPt);
             SceneGetCenter(G, offpt);
-            TextSetPosNColor(G, offpt, v);
+            TextSetPosNColor(G, offpt, I->labelV[c].color);
             SceneGetScaledAxes(G, I->obj, xn, yn);
             if (!I->shaderCGO) {
               if (relativeMode & 2) { // label_relative_mode = 1
@@ -1474,16 +1483,17 @@ void RepLabel::render(RenderInfo* info)
                 CGOPickColor(I->shaderCGO, p->index, p->bond);
             }
 
-            TextSetPosNColor(G, tCenterPt, v);
-            TextSetTargetPos(G, v + 3);
-            st = LexStr(G, *l);
-            TextSetLabelBkgrdInfo(G, *(v + 16), *(v + 17), (v + 18));
+            TextSetPosNColor(G, tCenterPt, I->labelV[c].color);
+            TextSetTargetPos(G, I->labelV[c].coord);
+            auto st = LexStr(G, l);
+            TextSetLabelBkgrdInfo(G, I->labelV[c].spacing, I->labelV[c].justification,
+                I->labelV[c].padding);
             if (relativeMode & 8) { // label_z_target, adjust z to target
-              TextGetLabelPos(G)[0] = (SceneGetDepth(G, v + 3) - .5) * 2.f;
+              TextGetLabelPos(G)[0] = (SceneGetDepth(G, I->labelV[c].coord) - .5) * 2.f;
               TextSetLabelPosIsSet(G, 1);
             } else if (relativeMode & 6) { // label_relative_mode 1 or 2, i.e.,
-                                           // screen stabilized, adjust z
-              TextSetLabelPos(G, v + 6);
+                                            // screen stabilized, adjust z
+              TextSetLabelPos(G, I->labelV[c].screen_point);
               TextSetLabelPosIsSet(G, 2);
 #ifndef PURE_OPENGL_ES_2
               glDisable(GL_FOG);
@@ -1495,9 +1505,10 @@ void RepLabel::render(RenderInfo* info)
             if (!use_shader)
               glPushMatrix();
 #endif
-            if (!TextRenderOpenGL(G, info, font_id, st, font_size, v + 12,
-                    (draw_var ? 1 : 0), (short) *(v + 15), use_shader,
-                    SHADERCGO)) {
+            if (!TextRenderOpenGL(G, info, font_id, st, font_size,
+                    I->labelV[c].position, (draw_var ? 1 : 0),
+                    I->labelV[c].getRelativeMode(), use_shader,
+                    I->shaderCGO)) {
               CGOFree(connectorCGO);
               return;
             }
@@ -1511,14 +1522,17 @@ void RepLabel::render(RenderInfo* info)
               RotMatrix = SceneGetMatrix(G);
 
               if (I->shaderCGO) {
-                CGODrawConnector(connectorCGO, v + 3, v + 6, text_width,
-                    text_height, indentFactor, screenWorldOffset, v + 9,
-                    ((short) *(v + 15)), draw_var, *(v + 22), (v + 23),
-                    *(v + 27) * font_size / text_height, *(v + 26));
+                CGODrawConnector(connectorCGO, I->labelV[c].coord,
+                    I->labelV[c].screen_point, text_width, text_height, indentFactor,
+                    screenWorldOffset, I->labelV[c].connector_color,
+                    I->labelV[c].getRelativeMode(), draw_var,
+                    I->labelV[c].bg_alpha, I->labelV[c].bg_color,
+                    I->labelV[c].connector_ext_len * font_size / text_height,
+                    I->labelV[c].connector_width);
                 has_connector = 1;
               } else {
 #ifndef PURE_OPENGL_ES_2
-                RepLabelRenderBackgroundInImmediate(G, I, v, draw_var,
+                RepLabelRenderBackgroundInImmediate(G, I, I->labelV[c].color, draw_var,
                     tCenterPt, relativeMode, xn, yn, PmvMatrix, RotMatrix,
                     screenwidth, screenheight, screenWorldOffset, indentFactor,
                     text_width, text_height, font_size);
@@ -1527,8 +1541,8 @@ void RepLabel::render(RenderInfo* info)
             }
 #ifdef PURE_OPENGL_ES_2
             if (float_text && draw_var) {
-              TextRenderOpenGL(G, info, font_id, st, font_size, v + 12, 1,
-                  (short) *(v + 15), 1, SHADERCGO);
+              TextRenderOpenGL(G, info, font_id, st, font_size, I->labelV[c].position,
+                  1, I->labelV[c].getRelativeMode(), 1, I->shaderCGO);
             }
 #else
             if (!use_shader) {
@@ -1538,8 +1552,9 @@ void RepLabel::render(RenderInfo* info)
                 // don't handle z-buffer offset properly, before, only did this
                 // when float_text && draw_var
                 glPushMatrix();
-                TextRenderOpenGL(G, info, font_id, st, font_size, v + 12, 1,
-                    (short) *(v + 15), 1, SHADERCGO);
+                TextRenderOpenGL(G, info, font_id, st, font_size,
+                    I->labelV[c].position, 1, I->labelV[c].getRelativeMode(), 1,
+                    I->shaderCGO);
                 glPopMatrix();
               }
             }
@@ -1551,8 +1566,6 @@ void RepLabel::render(RenderInfo* info)
 #endif
             }
           }
-          l++;
-          v += 28;
         }
         if (!has_connector) {
           CGOFree(connectorCGO);
@@ -1617,8 +1630,9 @@ void RepLabel::render(RenderInfo* info)
 #endif
           glEnable(GL_BLEND);
         }
-        if (float_text)
+        if (float_text) {
           glEnable(GL_DEPTH_TEST);
+        }
         info->use_shaders = pre_use_shaders;
       }
     }
@@ -1629,13 +1643,10 @@ Rep* RepLabelNew(CoordSet* cs, int state)
 {
   PyMOLGlobals* G = cs->G;
   ObjectMolecule* obj;
-  int a, a1, c1;
-  float* v;
+  int c1;
   const float* vc;
-  lexidx_t* l;
   int label_color;
   Pickable* rp = nullptr;
-  AtomInfoType* ai;
 
   // skip if no labels are visible
   if (!cs->hasRep(cRepLabelBit))
@@ -1649,10 +1660,8 @@ Rep* RepLabelNew(CoordSet* cs, int state)
 
   /* raytracing primitives */
 
-  I->L = pymol::calloc<lexidx_t>(cs->NIndex);
-  ErrChkPtr(G, I->L);
-  I->V = pymol::calloc<float>(cs->NIndex * 28);
-  ErrChkPtr(G, I->V);
+  I->L.resize(cs->NIndex);
+  I->labelV.resize(cs->NIndex);
 
   I->OutlineColor = SettingGet_color(
       G, cs->Setting.get(), obj->Setting.get(), cSetting_label_outline_color);
@@ -1665,12 +1674,11 @@ Rep* RepLabelNew(CoordSet* cs, int state)
   }
 
   I->N = 0;
+  int n = 0;
 
-  v = I->V;
-  l = I->L;
-  for (a = 0; a < cs->NIndex; a++) {
-    a1 = cs->IdxToAtm[a];
-    ai = obj->AtomInfo + a1;
+  for (int a = 0; a < cs->NIndex; a++) {
+    auto a1 = cs->IdxToAtm[a];
+    auto ai = obj->AtomInfo + a1;
     if ((ai->visRep & cRepLabelBit) && (ai->label)) {
       int at_label_color =
           AtomSettingGetWD(G, ai, cSetting_label_color, label_color);
@@ -1685,14 +1693,10 @@ Rep* RepLabelNew(CoordSet* cs, int state)
       /* V - Color, Coordinate, Coordinate + Offset (from
        * label_placement_offset), label_position) */
       vc = ColorGet(G, c1); /* save new color */
-      *(v++) = *(vc++);
-      *(v++) = *(vc++);
-      *(v++) = *(vc++);
+      std::copy_n(vc, 3, I->labelV[n].color);
 
       const float* v0 = cs->coordPtr(a);
-      *(v++) = *(v0++);
-      *(v++) = *(v0++);
-      *(v++) = *(v0++);
+      std::copy_n(v0, 3, I->labelV[n].coord);
       {
         const float *at_label_pos, *at_label_padding;
         const float* con_color;
@@ -1710,15 +1714,14 @@ Rep* RepLabelNew(CoordSet* cs, int state)
           const float* at_label_screen_point;
           AtomStateGetSetting(G, obj, cs, a, ai, cSetting_label_screen_point,
               &at_label_screen_point);
-          copy3f(at_label_screen_point, v);
-          RepLabelAdjustScreenZ(G, v);
+          std::copy_n(at_label_screen_point, 3, I->labelV[n].screen_point);
+          RepLabelAdjustScreenZ(G, I->labelV[n].screen_point);
         } else {
           const float* at_label_place;
           AtomStateGetSetting(G, obj, cs, a, ai,
               cSetting_label_placement_offset, &at_label_place);
-          add3f(at_label_place, v - 3, v);
+          add3f(at_label_place, I->labelV[n].coord, I->labelV[n].screen_point);
         }
-        v += 3;
         AtomStateGetSetting_color(
             G, obj, cs, a, ai, cSetting_label_connector_color, &at_con_color);
 
@@ -1728,8 +1731,7 @@ Rep* RepLabelNew(CoordSet* cs, int state)
           at_con_color = ai->color;
 
         con_color = ColorGet(G, at_con_color);
-        copy3f(con_color, v);
-        v += 3;
+        std::copy_n(con_color, 3, I->labelV[n].connector_color);
 
         AtomStateGetSetting_b(G, obj, cs, a, ai,
             cSetting_ray_label_connector_flat, &ray_label_connector_flat);
@@ -1744,8 +1746,7 @@ Rep* RepLabelNew(CoordSet* cs, int state)
 
         AtomStateGetSetting(
             G, obj, cs, a, ai, cSetting_label_position, &at_label_pos);
-        copy3f(at_label_pos, v);
-        v += 3;
+        std::copy_n(at_label_pos, 3, I->labelV[n].position);
 
         AtomStateGetSetting_f(G, obj, cs, a, ai,
             cSetting_label_multiline_spacing, &at_label_spacing);
@@ -1777,38 +1778,37 @@ Rep* RepLabelNew(CoordSet* cs, int state)
         isProjected = (at_label_relative_mode < 1) ? 1 : 0;
         isScreenCoord = (at_label_relative_mode == 1) ? 1 : 0;
         isPixelCoord = (isProjected + isScreenCoord) ? 0 : 1;
-        *(v++) = (float) (drawConnector + isScreenCoord * 2 + isPixelCoord * 4 +
-                          at_label_z_target * 8);
-        *(v++) = at_label_spacing;
-        *(v++) = at_label_justification;
-        copy3f(at_label_padding, v);
-        v += 3;
+        I->labelV[n].relativeMode_f =
+            static_cast<float>(drawConnector + isScreenCoord * 2 +
+                               isPixelCoord * 4 + at_label_z_target * 8);
+        I->labelV[n].spacing = at_label_spacing;
+        I->labelV[n].justification = at_label_justification;
+        std::copy_n(at_label_padding, 3, I->labelV[n].padding);
         label_connector_mode_1 = label_connector_mode == 1;
         label_connector_mode_2 = label_connector_mode == 2;
         label_connector_mode_3 = label_connector_mode == 3;
         label_connector_mode_4 = label_connector_mode == 4;
 
-        *(v++) =
-            (float) (label_connector + 2 * label_bg + 4 * label_bg_outline +
-                     8 * label_connector_mode_1 + 16 * label_connector_mode_2 +
-                     32 * label_connector_mode_3 + 64 * label_connector_mode_4 +
-                     128 * ray_label_connector_flat);
+        I->labelV[n].draw_var_f = static_cast<float>(
+            label_connector + 2 * label_bg + 4 * label_bg_outline +
+            8 * label_connector_mode_1 + 16 * label_connector_mode_2 +
+            32 * label_connector_mode_3 + 64 * label_connector_mode_4 +
+            128 * ray_label_connector_flat);
 
-        *(v++) = 1.f - at_label_bkgrd_transp;
+        I->labelV[n].bg_alpha = 1.0f - at_label_bkgrd_transp;
 
         /* behave just like the label color */
         if (!((at_con_color >= 0) || (at_con_color == cColorFront) ||
                 (at_con_color == cColorBack)))
           at_con_color = ai->color;
         con_color = ColorGet(G, at_con_color);
-        copy3f(con_color, v);
-        v += 3;
+        std::copy_n(con_color, 3, I->labelV[n].bg_color);
         AtomStateGetSetting_f(G, obj, cs, a, ai, cSetting_label_connector_width,
             &label_connector_width);
-        *(v++) = DIP2PIXEL(label_connector_width);
+        I->labelV[n].connector_width = DIP2PIXEL(label_connector_width);
         AtomStateGetSetting_f(G, obj, cs, a, ai,
             cSetting_label_connector_ext_length, &label_connector_ext_length);
-        *(v++) = label_connector_ext_length;
+        I->labelV[n].connector_ext_len = label_connector_ext_length;
       }
       if (rp) {
         rp->index = a1;
@@ -1816,20 +1816,21 @@ Rep* RepLabelNew(CoordSet* cs, int state)
             ai->masked ? cPickableNoPick : cPickableLabel; /* label indicator */
         rp++;
       }
-      *(l++) = ai->label;
+      I->L[n] = ai->label;
+      n++;
     }
   }
 
   if (I->N) {
-    I->V = ReallocForSure(I->V, float, (v - I->V));
-    I->L = ReallocForSure(I->L, lexidx_t, (l - I->L));
+    I->labelV.resize(n);
+    I->L.resize(n);
     if (rp) {
       I->P = ReallocForSure(I->P, Pickable, (rp - I->P));
       I->P[0].index = I->N; /* unnec? */
     }
   } else {
-    I->V = ReallocForSure(I->V, float, 1);
-    I->L = ReallocForSure(I->L, lexidx_t, 1);
+    I->labelV.resize(1);
+    I->L.resize(1);
     if (rp) {
       FreeP(I->P);
     }
