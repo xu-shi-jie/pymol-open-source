@@ -1927,6 +1927,7 @@ void SettingGenerateSideEffects(PyMOLGlobals * G, int index, const char *sele, i
     ExecutiveUpdateSceneMembers(G);
   case cSetting_grid_slot:
     ExecutiveInvalidateGroups(G, false);
+    ExecutiveUpdateSceneMembers(G);
     SceneChanged(G);
     break;
   case cSetting_grid_max:
