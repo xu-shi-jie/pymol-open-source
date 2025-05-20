@@ -364,8 +364,8 @@ int ObjectMapStateGetHistogram(PyMOLGlobals * G, ObjectMapState * ms,
  * @param state Object state (can be -2 for current state)
  * @return True if the map state exists and `result` has been written to
  */
-int ObjectMapInterpolate(ObjectMap * I, int state, const float *array, float *result, int *flag,
-                         int n)
+int ObjectMapInterpolate(ObjectMap* I, int state, const float* array,
+    float* result, std::uint8_t* flag, int n)
 {
   int ok = false;
   float txf_buffer[3];
@@ -1012,8 +1012,8 @@ int ObjectMapStateContainsPoint(ObjectMapState * ms, float *point)
  * indicating if points were within map bounds (optional, can be nullptr)
  * @return False if any coordinate was out of bounds
  */
-int ObjectMapStateInterpolate(ObjectMapState * ms, const float *array, float *result, int *flag,
-                              int n)
+int ObjectMapStateInterpolate(
+    ObjectMapState* ms, const float* array, float* result, std::uint8_t* flag, int n)
 {
   int ok = true;
   const float *inp;

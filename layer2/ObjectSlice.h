@@ -19,6 +19,9 @@ Z* -------------------------------------------------------------------
 
 #include "ObjectMap.h"
 
+#include <cstdint>
+#include <vector>
+
 struct ObjectSliceState {
   PyMOLGlobals* G;
   /* stored in a session */
@@ -46,17 +49,17 @@ struct ObjectSliceState {
   /* the data is normalized for easier ploting */
   int n_points = 0;
 
-  pymol::vla<float> values;
-  pymol::vla<float> points;
-  pymol::vla<int> flags;
-  pymol::vla<float> colors;
-  pymol::vla<float> normals;
+  std::vector<float> values;
+  std::vector<glm::vec3> points;
+  std::vector<std::uint8_t> flags;
+  std::vector<glm::vec3> colors;
+  std::vector<glm::vec3> normals;
 
   int n_strips = 0;
-  pymol::vla<int> strips;
+  std::vector<int> strips;
 
   pymol::cache_ptr<CGO> shaderCGO;
-  float Corner[24];
+  std::array<glm::vec3, 8> Corner;
 
   float outline_points[36];
   int outline_n_points = 0;

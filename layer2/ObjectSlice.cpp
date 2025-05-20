@@ -228,15 +228,14 @@ static void ObjectSliceStateAssignColors(
     ObjectSliceState* oss, ObjectGadgetRamp* ogr)
 {
   /* compute the colors */
-  if (oss && oss->values && oss->colors) {
-    int x, y;
+  if (oss && !oss->values.empty() && !oss->colors.empty()) {
     int* min = oss->min;
     int* max = oss->max;
     float* value = oss->values.data();
-    int* flag = oss->flags.data();
-    float* color = oss->colors.data();
-    for (y = min[1]; y <= max[1]; y++) {
-      for (x = min[0]; x <= max[0]; x++) {
+    auto* flag = oss->flags.data();
+    auto* color = glm::value_ptr(oss->colors.front());
+    for (int y = min[1]; y <= max[1]; y++) {
+      for (int x = min[0]; x <= max[0]; x++) {
         if (*flag) {
           ObjectGadgetRampInterpolate(ogr, *value, color);
           ColorLookupColor(oss->G, color);
@@ -249,21 +248,40 @@ static void ObjectSliceStateAssignColors(
   }
 }
 
+/**
+ * @brief Determines if Track Camera setting is enabled and allowed
+ * @param slice the slice object whose track_camera setting is queried
+ * @return true if the track camera setting is enabled
+ * @note In GPU module mode, this is forced off for now.
+ */
+static bool IsTrackCameraEnabled(const ObjectSlice& slice)
+{
+  auto G = slice.G;
+  auto track_camera = SettingGet<bool>(
+      G, nullptr, slice.Setting.get(), cSetting_slice_track_camera);
+  return track_camera;
+}
+
+/**
+ * @brief Updates a slice object state
+ * @param I slice object
+ * @param oss slice object state
+ * @param oms corresponding object map state
+ */
 static void ObjectSliceStateUpdate(
     ObjectSlice* I, ObjectSliceState* oss, ObjectMapState* oms)
 {
   int ok = true;
   int min[2] = {0, 0}, max[2] = {0, 0}; /* limits of the rectangle */
   int need_normals = false;
-  int track_camera = SettingGet_b(
-      I->G, nullptr, I->Setting.get(), cSetting_slice_track_camera);
+  auto track_camera = IsTrackCameraEnabled(*I);
   float grid =
-      SettingGet_f(I->G, nullptr, I->Setting.get(), cSetting_slice_grid);
+      SettingGet<float>(I->G, nullptr, I->Setting.get(), cSetting_slice_grid);
   int min_expand = 1;
 
-  if (SettingGet_b(
+  if (SettingGet<bool>(
           I->G, nullptr, I->Setting.get(), cSetting_slice_dynamic_grid)) {
-    float resol = SettingGet_f(I->G, nullptr, I->Setting.get(),
+    float resol = SettingGet<float>(I->G, nullptr, I->Setting.get(),
         cSetting_slice_dynamic_grid_resolution);
     float scale = SceneGetScreenVertexScale(I->G, oss->origin);
     oss->last_scale = scale;
@@ -388,19 +406,19 @@ static void ObjectSliceStateUpdate(
     int n_alloc =
         (1 + oss->max[0] - oss->min[0]) * (1 + oss->max[1] - oss->min[1]);
 
-    oss->points.reserve(n_alloc * 3);
-    oss->values.reserve(n_alloc);
-    oss->colors.reserve(n_alloc * 3);
-    oss->flags.reserve(n_alloc);
+    oss->points.resize(n_alloc);
+    oss->values.resize(n_alloc);
+    oss->colors.resize(n_alloc);
+    oss->flags.resize(n_alloc);
 
-    if (!(oss->points && oss->values && oss->flags)) {
+    if (!(!oss->points.empty() && !oss->values.empty() && !oss->flags.empty())) {
       ok = false;
       PRINTFB(I->G, FB_ObjectSlice, FB_Errors)
       "ObjectSlice-Error: allocation failed\n" ENDFB(I->G);
     }
 
-    if (!oss->strips) /* this is range-checked during use */
-      oss->strips = pymol::vla<int>(n_alloc);
+    if (oss->strips.empty()) /* this is range-checked during use */
+      oss->strips.resize(n_alloc);
 
     oss->n_points = n_alloc;
   }
@@ -408,16 +426,14 @@ static void ObjectSliceStateUpdate(
   /* generate the coordinates */
 
   if (ok) {
-    int x, y;
-    float* point = oss->points.data();
-    for (y = min[1]; y <= max[1]; y++) {
-      for (x = min[0]; x <= max[0]; x++) {
-        point[0] = grid * x;
-        point[1] = grid * y;
-        point[2] = 0.0F;
+    auto* point_glm = oss->points.data();
+    for (int y = min[1]; y <= max[1]; y++) {
+      for (int x = min[0]; x <= max[0]; x++) {
+        *point_glm = glm::vec3(grid * x, grid * y, 0.0f);
+        auto point = glm::value_ptr(*point_glm);
         transform33f3f(oss->system, point, point);
         add3f(oss->origin, point, point);
-        point += 3;
+        point_glm++;
       }
     }
   }
@@ -425,7 +441,8 @@ static void ObjectSliceStateUpdate(
   /* interpolate and flag the points inside the map */
 
   if (ok) {
-    ObjectMapStateInterpolate(oms, oss->points.data(), oss->values.data(),
+    auto points_ptr_f = glm::value_ptr(oss->points.front());
+    ObjectMapStateInterpolate(oms, points_ptr_f, oss->values.data(),
         oss->flags.data(), oss->n_points);
   }
 
@@ -439,20 +456,20 @@ static void ObjectSliceStateUpdate(
           I->G, nullptr, I->Setting.get(), cSetting_slice_height_scale);
       float* value = oss->values.data();
       float up[3], scaled[3], factor;
-      int x, y;
-      float* point = oss->points.data();
+      auto* point = oss->points.data();
 
       need_normals = true;
       up[0] = oss->system[2];
       up[1] = oss->system[5];
       up[2] = oss->system[8];
 
-      for (y = min[1]; y <= max[1]; y++) {
-        for (x = min[0]; x <= max[0]; x++) {
+      for (int y = min[1]; y <= max[1]; y++) {
+        for (int x = min[0]; x <= max[0]; x++) {
           factor = ((*value - oss->MapMean) / oss->MapStdev) * height_scale;
           scale3f(up, factor, scaled);
-          add3f(scaled, point, point);
-          point += 3;
+          auto point_ptr = glm::value_ptr(*point);
+          add3f(scaled, point_ptr, point_ptr);
+          point++;
           value++;
         }
       }
@@ -465,15 +482,14 @@ static void ObjectSliceStateUpdate(
    * in the map */
 
   if (ok) {
-    int x, y;
     int cols = 1 + max[0] - min[0];
     int flag00, flag01, flag10, flag11;
     int offset = 0, offset00, offset01, offset10, offset11;
     int strip_active = false;
     int n = 0;
-    for (y = min[1]; y < max[1]; y++) {
+    for (int y = min[1]; y < max[1]; y++) {
       offset00 = offset;
-      for (x = min[0]; x < max[0]; x++) {
+      for (int x = min[0]; x < max[0]; x++) {
         offset01 = offset00 + 1;
         offset10 = offset00 + cols;
         offset11 = offset10 + 1;
@@ -488,13 +504,13 @@ static void ObjectSliceStateUpdate(
           if (flag10 && flag00 && flag11) {
             /* continue current strip */
 
-            VLACheck(oss->strips, int, n);
+            VecCheck(oss->strips, n);
             oss->strips[n] = offset10;
             n++;
           } else {
             /* terminate current strip */
 
-            VLACheck(oss->strips, int, n);
+            VecCheck(oss->strips, n);
             oss->strips[n] = STOP_STRIP;
             strip_active = false;
             n++;
@@ -502,7 +518,7 @@ static void ObjectSliceStateUpdate(
         } else if (flag10 & flag00 && flag11) {
           /* start a new strip with correct parity */
 
-          VLACheck(oss->strips, int, n + 3);
+          VecCheck(oss->strips, n + 3);
           oss->strips[n] = START_STRIP;
           oss->strips[n + 1] = offset10;
           oss->strips[n + 2] = offset00;
@@ -516,12 +532,12 @@ static void ObjectSliceStateUpdate(
         if (strip_active) {
           if (flag00 && flag11 && flag01) {
             /* continue current strip */
-            VLACheck(oss->strips, int, n);
+            VecCheck(oss->strips, n);
             oss->strips[n] = offset01;
             n++;
           } else {
             /* terminate current strip */
-            VLACheck(oss->strips, int, n);
+            VecCheck(oss->strips, n);
             oss->strips[n] = STOP_STRIP;
             strip_active = false;
             n++;
@@ -529,7 +545,7 @@ static void ObjectSliceStateUpdate(
         } else if (flag00 & flag11 && flag01) {
           /* singleton triangle -- improper order for strip */
 
-          VLACheck(oss->strips, int, n + 5);
+          VecCheck(oss->strips, n + 5);
           oss->strips[n + 0] = START_STRIP;
           oss->strips[n + 1] = offset11;
           oss->strips[n + 2] = offset00;
@@ -541,14 +557,14 @@ static void ObjectSliceStateUpdate(
       }
       if (strip_active) {
         /* terminate current strip */
-        VLACheck(oss->strips, int, n);
+        VecCheck(oss->strips, n);
         oss->strips[n] = STOP_STRIP;
         strip_active = false;
         n++;
       }
       offset += cols;
     }
-    VLACheck(oss->strips, int, n);
+    VecCheck(oss->strips, n);
     n++;
     oss->n_strips = n;
   }
@@ -556,27 +572,25 @@ static void ObjectSliceStateUpdate(
   /* compute triangle normals if we need them */
 
   if (!need_normals) {
-    VLAFreeP(oss->normals);
+    oss->normals.clear();
   } else {
-    int* cnt = nullptr;
 
-    oss->normals.reserve(oss->n_points * 3);
-    cnt = pymol::calloc<int>(oss->n_points);
+    oss->normals.resize(oss->n_points);
+    std::vector<int> count(oss->n_points);
 
-    if (cnt && oss->normals) {
+    if (!count.empty() && !oss->normals.empty()) {
       int* strip = oss->strips.data();
-      float* point = oss->points.data();
-      float* normal = oss->normals.data();
+      auto* point = glm::value_ptr(oss->points.front());
+      auto* normal = glm::value_ptr(oss->normals.front());
       int n = oss->n_strips;
-      int a;
       int offset0 = 0, offset1 = 0, offset2, offset;
       int strip_active = false;
       int tri_count = 0;
 
       float d1[3], d2[3], cp[3];
-      UtilZeroMem(oss->normals.data(), sizeof(float) * 3 * oss->n_points);
+      std::fill_n(oss->normals.begin(), oss->n_points, glm::vec3(0.0f));
 
-      for (a = 0; a < n; a++) {
+      for (int a = 0; a < n; a++) {
         offset = *(strip++);
         switch (offset) {
         case START_STRIP:
@@ -607,79 +621,69 @@ static void ObjectSliceStateUpdate(
               add3f(cp, normal + 3 * offset0, normal + 3 * offset0);
               add3f(cp, normal + 3 * offset1, normal + 3 * offset1);
               add3f(cp, normal + 3 * offset2, normal + 3 * offset2);
-              cnt[offset0]++;
-              cnt[offset1]++;
-              cnt[offset2]++;
+              count[offset0]++;
+              count[offset1]++;
+              count[offset2]++;
             }
           }
         }
       }
 
       { /* now normalize the average normals for active vertices */
-        int x, y;
-        float* normal = oss->normals.data();
-        int* c = cnt;
-        for (y = min[1]; y <= max[1]; y++) {
-          for (x = min[0]; x <= max[0]; x++) {
-            if (*c)
+        auto* normal = glm::value_ptr(oss->normals.front());
+        int curr_count{};
+        for (int y = min[1]; y <= max[1]; y++) {
+          for (int x = min[0]; x <= max[0]; x++) {
+            if (count[curr_count]) {
               normalize3f(normal);
-            point += 3;
-            c++;
+            }
+            curr_count++;
           }
         }
       }
     }
-    FreeP(cnt);
   }
 }
 
 void ObjectSlice::update()
 {
-
   auto I = this;
-  ObjectSliceState* oss;
-  ObjectMapState* oms = nullptr;
-  ObjectMap* map = nullptr;
-  ObjectGadgetRamp* ogr = nullptr;
-
-  int a;
-  for (a = 0; a < I->State.size(); a++) {
-    oss = &I->State[a];
-    if (oss && oss->Active) {
-      map = ExecutiveFindObjectMapByName(I->G, oss->MapName);
-      if (!map) {
-        PRINTFB(I->G, FB_ObjectSlice, FB_Errors)
-        "ObjectSliceUpdate-Error: map '%s' has been deleted.\n",
-            oss->MapName ENDFB(I->G);
-      }
-      if (map) {
-        oms = ObjectMapGetState(map, oss->MapState);
-      }
-      if (oms) {
-
-        if (oss->RefreshFlag) {
-          oss->RefreshFlag = false;
-          PRINTFB(I->G, FB_ObjectSlice, FB_Blather)
-          " ObjectSlice: updating \"%s\".\n", I->Name ENDFB(I->G);
-          if (oms->Field) {
-            ObjectSliceStateUpdate(I, oss, oms);
-            ogr = ColorGetRamp(I->G, I->Color);
-            if (ogr)
-              ObjectSliceStateAssignColors(oss, ogr);
-            else { /* solid color */
-              const float* solid = ColorGet(I->G, I->Color);
-              float* color = oss->colors.data();
-              for (a = 0; a < oss->n_points; a++) {
-                *(color++) = solid[0];
-                *(color++) = solid[1];
-                *(color++) = solid[2];
-              }
-            }
-          }
+  bool invalidate = false;
+  for (auto& ossRef : I->State) {
+    auto* oss = &ossRef;
+    if (!oss->Active || !oss->RefreshFlag) {
+      continue;
+    }
+    auto* map = ExecutiveFindObjectMapByName(I->G, oss->MapName);
+    if (!map) {
+      PRINTFB(I->G, FB_ObjectSlice, FB_Errors)
+      "ObjectSliceUpdate-Error: map '%s' has been deleted.\n",
+          oss->MapName ENDFB(I->G);
+      continue;
+    }
+    auto* oms = ObjectMapGetState(map, oss->MapState);
+    if (!oms) {
+      continue;
+    }
+    oss->RefreshFlag = false;
+    PRINTFB(I->G, FB_ObjectSlice, FB_Blather)
+    " ObjectSlice: updating \"%s\".\n", I->Name ENDFB(I->G);
+    if (oms->Field) {
+      ObjectSliceStateUpdate(I, oss, oms);
+      auto ogr = ColorGetRamp(I->G, I->Color);
+      if (ogr) {
+        ObjectSliceStateAssignColors(oss, ogr);
+      } else { /* solid color */
+        auto solid = glm::make_vec3(ColorGet(I->G, I->Color));
+        for (int a = 0; a < oss->n_points; a++) {
+          oss->colors[a] = solid;
         }
       }
-      SceneInvalidate(I->G);
+      invalidate = true;
     }
+  }
+  if (invalidate) {
+    SceneInvalidate(I->G);
   }
 }
 
@@ -763,7 +767,7 @@ int ObjectSliceGetVertex(ObjectSlice* I, int index, int base, float* v)
   if (oss) {
     if ((offset >= 0) && (offset < oss->n_points))
       if (oss->flags[offset]) {
-        copy3f(oss->points + 3 * offset, v);
+        copy3f(glm::value_ptr(oss->points[offset]), v);
         result = true;
       }
   }
@@ -906,338 +910,344 @@ void GenerateOutlineOfSlice(PyMOLGlobals *G, ObjectSliceState *oss, CGO *cgo){
   }
   ObjectSliceDrawSlice(cgo, points, n_points/3, zaxis);
 }
+#endif // PURE_OPENGL_ES_2
+#endif // 0
+
+static float GetObjectSliceAlpha(PyMOLGlobals* G, ObjectSlice* I)
+{
+  auto alpha =
+      SettingGet<float>(G, nullptr, I->Setting.get(), cSetting_transparency);
+  alpha = 1.0f - alpha;
+  if (fabs(alpha - 1.0) < R_SMALL4) {
+    alpha = 1.0f;
+  }
+  return alpha;
+}
+
+void ObjectSliceStateRenderRay(ObjectSlice* I, ObjectSliceState* oss, RenderInfo* info)
+{
+  auto G = I->G;
+  auto* ray = info->ray;
+  auto alpha = GetObjectSliceAlpha(G, I);
+  ray->transparentf(1.0f - alpha);
+  if ((I->visRep & cRepSliceBit)) {
+    auto* point = glm::value_ptr(oss->points.front());
+    auto* color = glm::value_ptr(oss->colors.front());
+    int strip_active = false;
+    int tri_count = 0;
+
+    float normal[3] {oss->system[2], oss->system[5], oss->system[8]};
+    auto* n0 = normal;
+    auto* n1 = normal;
+    auto* n2 = normal;
+
+    int offset0 = 0, offset1 = 0, offset2;
+    for (int a = 0; a < oss->n_strips; a++) {
+      auto offset = oss->strips[a];
+      switch (offset) {
+      case START_STRIP:
+        strip_active = true;
+        tri_count = 0;
+        break;
+      case STOP_STRIP:
+        strip_active = false;
+        break;
+      default:
+        if (strip_active) {
+          tri_count++;
+          offset2 = offset1;
+          offset1 = offset0;
+          offset0 = offset;
+
+          if (tri_count >= 3) {
+
+            if (!oss->normals.empty()) {
+              n0 = glm::value_ptr(oss->normals[offset0]);
+              n1 = glm::value_ptr(oss->normals[offset1]);
+              n2 = glm::value_ptr(oss->normals[offset2]);
+            }
+
+            if (tri_count & 0x1) { /* get the handedness right ... */
+              ray->triangle3fv(point + 3 * offset0, point + 3 * offset1,
+                  point + 3 * offset2, n0, n1, n2, color + 3 * offset0,
+                  color + 3 * offset1, color + 3 * offset2);
+            } else {
+              ray->triangle3fv(point + 3 * offset1, point + 3 * offset0,
+                  point + 3 * offset2, n1, n0, n2, color + 3 * offset1,
+                  color + 3 * offset0, color + 3 * offset2);
+            }
+          }
+        }
+        break;
+      }
+    }
+  }
+  ray->transparentf(0.0);
+}
+
+void ObjectSliceRenderRasterImmediate(
+    ObjectSlice* I, ObjectSliceState* oss, RenderInfo* info, int state)
+{
+#ifndef PURE_OPENGL_ES_2
+  auto* G = I->G;
+  auto* pick = info->pick;
+  Picking p;
+  SceneSetupGLPicking(G);
+  p.context.object = I;
+  p.context.state = 0;
+  p.src.index = state + 1;
+  p.src.bond = 0;
+
+  if ((I->visRep & cRepSliceBit)) {
+    int* strip = oss->strips.data();
+    auto* point = glm::value_ptr(oss->points.front());
+    int n = oss->n_strips;
+    int offset0 = 0, offset1 = 0, offset2, offset;
+    int strip_active = false;
+    int tri_count = 0;
+    for (int a = 0; a < n; a++) {
+      offset = *(strip++);
+      switch (offset) {
+      case START_STRIP:
+        if (!strip_active) {
+          glBegin(GL_TRIANGLES);
+        }
+        strip_active = true;
+        tri_count = 0;
+        break;
+      case STOP_STRIP:
+        if (strip_active)
+          glEnd();
+        strip_active = false;
+        break;
+      default:
+        if (strip_active) {
+          tri_count++;
+          offset2 = offset1;
+          offset1 = offset0;
+          offset0 = offset;
+
+          if (tri_count >= 3) {
+            unsigned char color[4];
+            AssignNewPickColor(nullptr, pick, color, &I->context,
+                p.src.index, p.src.bond);
+            glColor4ubv(color);
+
+            if (tri_count &
+                0x1) { /* get the handedness right ... */
+              glVertex3fv(point + 3 * offset0);
+              glVertex3fv(point + 3 * offset1);
+              glVertex3fv(point + 3 * offset2);
+            } else {
+              glVertex3fv(point + 3 * offset1);
+              glVertex3fv(point + 3 * offset0);
+              glVertex3fv(point + 3 * offset2);
+            }
+            p.src.bond = offset0 + 1;
+          }
+        }
+        break;
+      }
+    }
+    if (strip_active) { /* just in case */
+      glEnd();
+    }
+  }
 #endif
-#endif
+}
+
+/**
+ * @brief Generates the Slice state's CGO for rendering
+ * @param I slice object
+ * @param oss slice object state
+ * @param track_camera flag for if camera tracking is enabled
+ * @param use_shaders flag for if shaders are enabled
+ * @param state state requested for rendering
+ */
+void ObjectSliceStateGenerateCGO(ObjectSlice* I, ObjectSliceState* oss,
+    bool track_camera, bool use_shaders, float alpha, int state)
+{
+  auto G = I->G;
+
+  oss->shaderCGO.reset(CGONew(G));
+
+  SceneResetNormalCGO(G, oss->shaderCGO.get(), false);
+  ObjectUseColorCGO(oss->shaderCGO.get(), I);
+
+  if ((I->visRep & cRepSliceBit)) {
+    auto* point = glm::value_ptr(oss->points.front());
+    auto* color = glm::value_ptr(oss->colors.front());
+    int n = oss->n_strips;
+    int strip_active = false;
+
+    {
+      float normal[3];
+      normal[0] = oss->system[2];
+      normal[1] = oss->system[5];
+      normal[2] = oss->system[8];
+
+      CGONormalv(oss->shaderCGO.get(), normal);
+    }
+
+    for (int a = 0; a < n; a++) {
+      auto offset = oss->strips[a];
+      switch (offset) {
+      case START_STRIP:
+        if (!strip_active) {
+          CGOBegin(oss->shaderCGO.get(), GL_TRIANGLE_STRIP);
+        }
+        strip_active = true;
+        break;
+      case STOP_STRIP:
+        if (strip_active) {
+          CGOEnd(oss->shaderCGO.get());
+        }
+        strip_active = false;
+        break;
+      default:
+        if (strip_active) {
+          auto* col = color + 3 * offset;
+          if (!oss->normals.empty()) {
+            auto* vnormal = glm::value_ptr(oss->normals[offset]);
+            CGONormalv(oss->shaderCGO.get(), vnormal);
+          }
+          CGOAlpha(oss->shaderCGO.get(), alpha);
+          CGOColor(oss->shaderCGO.get(), col[0], col[1], col[2]);
+          CGOPickColor(oss->shaderCGO.get(), state + 1, offset + 1);
+          CGOVertexv(oss->shaderCGO.get(), point + 3 * offset);
+        }
+        break;
+      }
+    }
+    if (strip_active) { /* just in case */
+      CGOEnd(oss->shaderCGO.get());
+    }
+  }
+
+  CGOStop(oss->shaderCGO.get());
+  if (use_shaders) {
+    oss->shaderCGO.reset(CGOOptimizeToVBONotIndexed(oss->shaderCGO.get()));
+    assert(oss->shaderCGO->use_shader);
+  }
+  // any time cgo is re-generated, needs to invalidate so
+  // pick colors can be re-assigned
+  SceneInvalidatePicking(G);
+}
+
+/**
+ * @brief Performs any necessary state and object-level updates before
+ * rendering
+ * @param slice the slice object
+ * @param state the requested state to be rendered
+ * @param track_camera flag for if camera tracking is enabled
+ */
+void ObjectSliceCheckPreRenderUpdate(
+    ObjectSlice& slice, int state, bool track_camera)
+{
+  auto G = slice.G;
+  bool dynamic_grid = SettingGet<bool>(
+      G, nullptr, slice.Setting.get(), cSetting_slice_dynamic_grid);
+  if (!(track_camera || dynamic_grid)) {
+    return;
+  }
+  int update_flag = false;
+
+  for (auto oss_state : StateIteratorV2(&slice, state)) {
+    auto& oss = slice.State[oss_state];
+    SceneViewType view;
+    float pos[3];
+
+    SceneGetCenter(G, pos);
+    SceneGetView(G, view);
+
+    if (track_camera) { // Regenerate every frame
+      if ((diffsq3f(pos, oss.origin) > R_SMALL8) ||
+          (diffsq3f(view, oss.system) > R_SMALL8) ||
+          (diffsq3f(view + 4, oss.system + 3) > R_SMALL8) ||
+          (diffsq3f(view + 8, oss.system + 6) > R_SMALL8)) {
+        copy3f(pos, oss.origin);
+
+        copy3f(view, oss.system);
+        copy3f(view + 4, oss.system + 3);
+        copy3f(view + 8, oss.system + 6);
+        oss.RefreshFlag = true;
+        update_flag = true;
+      }
+    }
+    if (dynamic_grid && (!update_flag)) {
+      float scale = SceneGetScreenVertexScale(G, oss.origin);
+
+      if (fabs(scale - oss.last_scale) > R_SMALL4) {
+        update_flag = true;
+        oss.RefreshFlag = true;
+      }
+    }
+  }
+  slice.update();
+}
 
 void ObjectSlice::render(RenderInfo* info)
 {
-
   auto I = this;
   int state = info->state;
   CRay* ray = info->ray;
   auto pick = info->pick;
   const RenderPass pass = info->pass;
-  int cur_state = 0;
-  float alpha;
-  int track_camera =
-      SettingGet_b(G, nullptr, I->Setting.get(), cSetting_slice_track_camera);
-  int dynamic_grid =
-      SettingGet_b(G, nullptr, I->Setting.get(), cSetting_slice_dynamic_grid);
-  ObjectSliceState* oss = nullptr;
-  int use_shaders = !track_camera && SettingGet_b(G, nullptr, I->Setting.get(),
-                                         cSetting_use_shaders);
+  auto alpha = GetObjectSliceAlpha(I->G, I);
+  auto track_camera = IsTrackCameraEnabled(*I);
+
+  auto use_shaders =
+      !track_camera &&
+      SettingGet<bool>(G, nullptr, I->Setting.get(), cSetting_use_shaders);
+
   // just in case, since slice uses immediate mode, but this should never happen
   G->ShaderMgr->Disable_Current_Shader();
+  // TODO: Track camera on uses immediate mode OpenGL calls. Similar to Volume slices,
+  // we could generate the slice geometry on the fly and upload them to the GPU every frame
+  // from host-visible memory using the same indirect indexed buffer approach.
 
-  if (track_camera || dynamic_grid) {
-    int update_flag = false;
-
-    if (state >= 0)
-      if (state < I->State.size())
-        if (I->State[state].Active)
-          oss = &I->State[state];
-
-    while (1) {
-      if (state < 0) { /* all_states */
-        oss = &I->State[cur_state];
-      } else {
-        if (oss) {
-
-          SceneViewType view;
-          float pos[3];
-
-          SceneGetCenter(G, pos);
-          SceneGetView(G, view);
-
-          if (track_camera) {
-            if ((diffsq3f(pos, oss->origin) > R_SMALL8) ||
-                (diffsq3f(view, oss->system) > R_SMALL8) ||
-                (diffsq3f(view + 4, oss->system + 3) > R_SMALL8) ||
-                (diffsq3f(view + 8, oss->system + 6) > R_SMALL8)) {
-              copy3f(pos, oss->origin);
-
-              copy3f(view, oss->system);
-              copy3f(view + 4, oss->system + 3);
-              copy3f(view + 8, oss->system + 6);
-              oss->RefreshFlag = true;
-              update_flag = true;
-            }
-          }
-          if (dynamic_grid && (!update_flag)) {
-            float scale = SceneGetScreenVertexScale(G, oss->origin);
-
-            if (fabs(scale - oss->last_scale) > R_SMALL4) {
-              update_flag = true;
-              oss->RefreshFlag = true;
-            }
-          }
-        }
-        if (state >= 0)
-          break;
-        cur_state = cur_state + 1;
-        if (cur_state >= I->State.size())
-          break;
-      }
-    }
-    I->update();
-  }
+  ObjectSliceCheckPreRenderUpdate(*I, state, track_camera);
 
   ObjectPrepareContext(I, info);
-  alpha = SettingGet_f(G, nullptr, I->Setting.get(), cSetting_transparency);
-  alpha = 1.0F - alpha;
-  if (fabs(alpha - 1.0) < R_SMALL4)
-    alpha = 1.0F;
 
-  if (state >= 0)
-    if (state < I->State.size())
-      if (I->State[state].Active)
-        oss = &I->State[state];
-
-  while (1) {
-    if (state < 0) { /* all_states */
-      oss = &I->State[cur_state];
+  for (auto oss_state : StateIteratorV2(I, state)) {
+    auto oss = &I->State[oss_state];
+    if (!oss->Active) {
+      continue;
+    }
+    if (ray) {
+      ObjectSliceStateRenderRay(I, oss, info);
+      continue;
+    }
+    if (!(G->HaveGUI && G->ValidContext)) {
+      continue;
+    }
+    if (pick) {
+      if (oss->shaderCGO && (I->visRep & cRepSliceBit)) {
+        CGORenderPicking(oss->shaderCGO.get(), info, &I->context,
+            I->Setting.get(), nullptr);
+      } else {
+        ObjectSliceRenderRasterImmediate(I, oss, info, state);
+      }
+      continue;
+    }
+    int render_now = false;
+    if (alpha > 0.0001) {
+      render_now = (pass == RenderPass::Transparent);
     } else {
-      if (!oss) {
-        if (I->State.size() &&
-            ((SettingGetGlobal_b(G, cSetting_static_singletons) &&
-                (I->State.size() == 1))))
-          oss = I->State.data();
-      }
+      render_now = pass == RenderPass::Antialias;
     }
-    if (oss) {
-      if (oss->Active) {
-        if (ray) {
 
-          ray->transparentf(1.0F - alpha);
-          if ((I->visRep & cRepSliceBit)) {
-            float normal[3], *n0, *n1, *n2;
-            int* strip = oss->strips.data();
-            float* point = oss->points.data();
-            float* color = oss->colors.data();
-            int n = oss->n_strips;
-            int a;
-            int offset0 = 0, offset1 = 0, offset2, offset;
-            int strip_active = false;
-            int tri_count = 0;
-
-            normal[0] = oss->system[2];
-            normal[1] = oss->system[5];
-            normal[2] = oss->system[8];
-
-            n0 = normal;
-            n1 = normal;
-            n2 = normal;
-
-            for (a = 0; a < n; a++) {
-              offset = *(strip++);
-              switch (offset) {
-              case START_STRIP:
-                strip_active = true;
-                tri_count = 0;
-                break;
-              case STOP_STRIP:
-                strip_active = false;
-                break;
-              default:
-                if (strip_active) {
-                  tri_count++;
-                  offset2 = offset1;
-                  offset1 = offset0;
-                  offset0 = offset;
-
-                  if (tri_count >= 3) {
-
-                    if (oss->normals) {
-                      n0 = oss->normals + 3 * offset0;
-                      n1 = oss->normals + 3 * offset1;
-                      n2 = oss->normals + 3 * offset2;
-                    }
-
-                    if (tri_count & 0x1) { /* get the handedness right ... */
-                      ray->triangle3fv(point + 3 * offset0, point + 3 * offset1,
-                          point + 3 * offset2, n0, n1, n2, color + 3 * offset0,
-                          color + 3 * offset1, color + 3 * offset2);
-                    } else {
-                      ray->triangle3fv(point + 3 * offset1, point + 3 * offset0,
-                          point + 3 * offset2, n1, n0, n2, color + 3 * offset1,
-                          color + 3 * offset0, color + 3 * offset2);
-                    }
-                  }
-                }
-                break;
-              }
-            }
-          }
-          ray->transparentf(0.0);
-        } else if (G->HaveGUI && G->ValidContext) {
-          if (pick) {
-            if (oss->shaderCGO && (I->visRep & cRepSliceBit)) {
-              CGORenderPicking(oss->shaderCGO.get(), info, &I->context,
-                  I->Setting.get(), nullptr);
-            } else {
-#ifndef PURE_OPENGL_ES_2
-              Picking p;
-              SceneSetupGLPicking(G);
-              p.context.object = I;
-              p.context.state = 0;
-              p.src.index = state + 1;
-              p.src.bond = 0;
-
-              if ((I->visRep & cRepSliceBit)) {
-                int* strip = oss->strips.data();
-                float* point = oss->points.data();
-                int n = oss->n_strips;
-                int a;
-                int offset0 = 0, offset1 = 0, offset2, offset;
-                int strip_active = false;
-                int tri_count = 0;
-                for (a = 0; a < n; a++) {
-                  offset = *(strip++);
-                  switch (offset) {
-                  case START_STRIP:
-                    if (!strip_active) {
-                      glBegin(GL_TRIANGLES);
-                    }
-                    strip_active = true;
-                    tri_count = 0;
-                    break;
-                  case STOP_STRIP:
-                    if (strip_active)
-                      glEnd();
-                    strip_active = false;
-                    break;
-                  default:
-                    if (strip_active) {
-                      tri_count++;
-                      offset2 = offset1;
-                      offset1 = offset0;
-                      offset0 = offset;
-
-                      if (tri_count >= 3) {
-                        unsigned char color[4];
-                        AssignNewPickColor(nullptr, pick, color, &I->context,
-                            p.src.index, p.src.bond);
-                        glColor4ubv(color);
-
-                        if (tri_count &
-                            0x1) { /* get the handedness right ... */
-                          glVertex3fv(point + 3 * offset0);
-                          glVertex3fv(point + 3 * offset1);
-                          glVertex3fv(point + 3 * offset2);
-                        } else {
-                          glVertex3fv(point + 3 * offset1);
-                          glVertex3fv(point + 3 * offset0);
-                          glVertex3fv(point + 3 * offset2);
-                        }
-                        p.src.bond = offset0 + 1;
-                      }
-                    }
-                    break;
-                  }
-                }
-                if (strip_active) { /* just in case */
-                  glEnd();
-                }
-              }
-#endif
-            }
-          } else { // !pick
-            int render_now = false;
-            if (alpha > 0.0001) {
-              render_now = (pass == RenderPass::Transparent);
-            } else
-              render_now = pass == RenderPass::Antialias;
-
-            if (render_now) {
-              int already_rendered = false;
-
-              if (oss->shaderCGO) {
-                CGORender(oss->shaderCGO.get(), nullptr, nullptr,
-                    I->Setting.get(), info, nullptr);
-                already_rendered = true;
-              } else {
-                oss->shaderCGO.reset(CGONew(G));
-              }
-
-              if (!already_rendered) {
-                SceneResetNormalCGO(G, oss->shaderCGO.get(), false);
-                ObjectUseColorCGO(oss->shaderCGO.get(), I);
-
-                if ((I->visRep & cRepSliceBit)) {
-                  int* strip = oss->strips.data();
-                  float* point = oss->points.data();
-                  float* color = oss->colors.data();
-                  float* vnormal = oss->normals.data();
-                  int n = oss->n_strips;
-                  int a;
-                  int offset;
-                  int strip_active = false;
-
-                  {
-                    float normal[3];
-                    normal[0] = oss->system[2];
-                    normal[1] = oss->system[5];
-                    normal[2] = oss->system[8];
-
-                    CGONormalv(oss->shaderCGO.get(), normal);
-                  }
-
-                  for (a = 0; a < n; a++) {
-                    offset = *(strip++);
-                    switch (offset) {
-                    case START_STRIP:
-                      if (!strip_active) {
-                        CGOBegin(oss->shaderCGO.get(), GL_TRIANGLE_STRIP);
-                      }
-                      strip_active = true;
-                      break;
-                    case STOP_STRIP:
-                      if (strip_active)
-                        CGOEnd(oss->shaderCGO.get());
-                      strip_active = false;
-                      break;
-                    default:
-                      if (strip_active) {
-                        float* col;
-                        col = color + 3 * offset;
-                        if (vnormal)
-                          CGONormalv(
-                              oss->shaderCGO.get(), vnormal + 3 * offset);
-                        CGOAlpha(oss->shaderCGO.get(), alpha);
-                        CGOColor(oss->shaderCGO.get(), col[0], col[1], col[2]);
-                        CGOPickColor(
-                            oss->shaderCGO.get(), state + 1, offset + 1);
-                        CGOVertexv(oss->shaderCGO.get(), point + 3 * offset);
-                      }
-                      break;
-                    }
-                  }
-                  if (strip_active) /* just in case */
-                    CGOEnd(oss->shaderCGO.get());
-                }
-
-                CGOStop(oss->shaderCGO.get());
-                if (use_shaders) {
-                  oss->shaderCGO.reset(
-                      CGOOptimizeToVBONotIndexed(oss->shaderCGO.get()));
-                  assert(oss->shaderCGO->use_shader);
-                }
-                CGORender(oss->shaderCGO.get(), nullptr, nullptr,
-                    I->Setting.get(), info, nullptr);
-                SceneInvalidatePicking(
-                    G); // any time cgo is re-generated, needs to invalidate so
-                // pick colors can be re-assigned
-              }
-            }
-          }
-        }
-      }
+    if (!render_now) {
+      continue;
     }
-    if (state >= 0)
-      break;
-    cur_state = cur_state + 1;
-    if (cur_state >= I->State.size())
-      break;
+
+    if (!oss->shaderCGO) {
+      ObjectSliceStateGenerateCGO(I, oss, track_camera, use_shaders, alpha, state);
+    }
+
+    CGORender(oss->shaderCGO.get(), nullptr, nullptr,
+        I->Setting.get(), info, nullptr);
   }
 }
 
@@ -1302,15 +1312,9 @@ ObjectSlice* ObjectSliceFromMap(
   oss->MapState = map_state;
   oms = ObjectMapGetState(map, map_state);
   if (oms) {
-    if (oss->points) {
-      VLAFreeP(oss->points);
-    }
-    if (oss->values) {
-      VLAFreeP(oss->points);
-    }
-    if (oss->flags) {
-      VLAFreeP(oss->flags);
-    }
+    oss->points.clear();
+    oss->values.clear();
+    oss->flags.clear();
 
     {
       float tmp[3];
@@ -1327,7 +1331,7 @@ ObjectSlice* ObjectSliceFromMap(
 
     memcpy(oss->ExtentMin, oms->ExtentMin, 3 * sizeof(float));
     memcpy(oss->ExtentMax, oms->ExtentMax, 3 * sizeof(float));
-    memcpy(oss->Corner, oms->Corner, 24 * sizeof(float));
+    memcpy(oss->Corner.data(), oms->Corner, 24 * sizeof(float));
   }
 
   strcpy(oss->MapName, map->Name);

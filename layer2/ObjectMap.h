@@ -167,8 +167,8 @@ pymol::Result<> ObjectMapTrim(ObjectMap * I, int state, float *mn, float *mx, in
 int ObjectMapSetBorder(ObjectMap * I, float level, int state);
 int ObjectMapStateSetBorder(ObjectMapState * I, float level);
 void ObjectMapStatePurge(PyMOLGlobals * G, ObjectMapState * I);
-int ObjectMapStateInterpolate(ObjectMapState * ms, const float *array, float *result, int *flag,
-                              int n);
+int ObjectMapStateInterpolate(
+    ObjectMapState* ms, const float* array, float* result, std::uint8_t* flag, int n);
 int ObjectMapStateContainsPoint(ObjectMapState * ms, float *point);
 ObjectMapState *ObjectMapStatePrime(ObjectMap * I, int state);
 void ObjectMapUpdateExtents(ObjectMap * I);
@@ -179,8 +179,8 @@ void ObjectMapUpdateExtents(ObjectMap * I);
 PyObject *ObjectMapAsPyList(ObjectMap * I);
 int ObjectMapNewFromPyList(PyMOLGlobals * G, PyObject * list, ObjectMap ** result);
 
-int ObjectMapInterpolate(ObjectMap * I, int state, const float *array, float *result, int *flag,
-                         int n);
+int ObjectMapInterpolate(ObjectMap* I, int state, const float* array,
+    float* result, std::uint8_t* flag, int n);
 
 void ObjectMapRegeneratePoints(ObjectMap * om);
 void ObjectMapStateRegeneratePoints(ObjectMapState * ms);

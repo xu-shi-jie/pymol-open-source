@@ -6611,7 +6611,7 @@ pymol::Result<> ExecutiveMapSet(PyMOLGlobals* G, const char* name,
       float *r_value = pymol::malloc<float>(n_pnt);
       float *l_value = pymol::calloc<float>(n_pnt);
       int *present = pymol::calloc<int>(n_pnt);
-      int *inside = pymol::malloc<int>(n_pnt);
+      std::vector<std::uint8_t> inside(n_pnt);
       SpecRec *rec;
 
       while(TrackerIterNextCandInList(I_Tracker, iter_id,
@@ -6620,12 +6620,12 @@ pymol::Result<> ExecutiveMapSet(PyMOLGlobals* G, const char* name,
           if(rec->type == cExecObject) {
             if(rec->obj->type == cObjectMap) {
               ObjectMap *obj = (ObjectMap *) rec->obj;
-              if (ObjectMapInterpolate(obj, src_state, pnt, r_value, inside, n_pnt))
+              if (ObjectMapInterpolate(obj, src_state, pnt, r_value, inside.data(), n_pnt))
               {
                 int a;
                 float *rv = r_value;
                 float *lv = l_value;
-                int *flg = inside;
+                auto* flg = inside.data();
                 int *pre = present;
 
                 switch (operator_) {
@@ -6779,7 +6779,6 @@ pymol::Result<> ExecutiveMapSet(PyMOLGlobals* G, const char* name,
       FreeP(present);
       FreeP(l_value);
       FreeP(r_value);
-      FreeP(inside);
       TrackerDelIter(I_Tracker, iter_id);
     }
   }
