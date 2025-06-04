@@ -73,6 +73,8 @@ static void SceneSetPrepareViewPortForStereo(PyMOLGlobals* G,
 
 static CGO* GenerateUnitScreenCGO(PyMOLGlobals* G);
 
+static bool NeedsOffscreenTextureForPP(PyMOLGlobals* G);
+
 static void SceneRenderPostProcessStack(PyMOLGlobals* G, const GLFramebufferConfig& parentImage);
 
 static int stereo_via_stencil(int stereo_mode)
@@ -315,7 +317,7 @@ void SceneRender(PyMOLGlobals* G, const SceneRenderInfo& renderInfo)
     GLFramebufferConfig targetImage{};
     targetImage.framebuffer = renderInfo.offscreen
                                   ? G->ShaderMgr->offscreen_ortho_rt
-                                  : CShaderMgr::OpenGLDefaultFramebufferID;
+                                  : G->ShaderMgr->topLevelConfig.framebuffer;
     if (targetImage.framebuffer == CShaderMgr::OpenGLDefaultFramebufferID) {
       targetImage.drawBuffer = render_buffer;
     }
@@ -457,8 +459,7 @@ void SceneRender(PyMOLGlobals* G, const SceneRenderInfo& renderInfo)
 #ifndef _PYMOL_NO_AA_SHADERS
       if (renderInfo.viewportOverride && false) {
         // Does not apply to Open-Source PyMOL
-        render_to_texture_for_pp =
-            SettingGet<int>(G, cSetting_antialias_shader);
+        render_to_texture_for_pp = NeedsOffscreenTextureForPP(G);
       }
       if (render_to_texture_for_pp) {
         if (!must_render_stereo || postprocessOnce) {
@@ -506,6 +507,7 @@ void SceneRender(PyMOLGlobals* G, const SceneRenderInfo& renderInfo)
               PrepareViewPortForMonoInitializeViewPort, times,
               renderInfo.mousePos, renderInfo.viewportOverride, stereo_mode,
               width_scale);
+          targetImage = G->ShaderMgr->topLevelConfig;
           SceneRenderPostProcessStack(G, targetImage);
         }
 #endif
@@ -1772,6 +1774,15 @@ CGO* GenerateUnitScreenCGO(PyMOLGlobals* G)
   CGOEnd(&cgo);
   assert(cgo.has_begin_end);
   return CGOOptimizeToVBONotIndexed(&cgo, 0);
+}
+
+/**
+ * @return true if offscreen texture is requested for post-processing
+ * @note For now, only antialiasing is the only postprocessing effect
+ */
+static bool NeedsOffscreenTextureForPP(PyMOLGlobals* G)
+{
+  return SettingGet<int>(G, cSetting_antialias_shader) != 0;
 }
 
 /**
