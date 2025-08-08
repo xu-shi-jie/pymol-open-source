@@ -3244,12 +3244,12 @@ pymol::Result<ObjectMolecule*> ObjectMoleculeReadCifStr(PyMOLGlobals * G, Object
                                       int zoom)
 {
   if (I) {
-    return pymol::Error("loading mmCIF into existing object not supported, "
+    return pymol::make_error("loading mmCIF into existing object not supported, "
                         "please use 'create' to append to an existing object.");
   }
 
   if (multiplex > 0) {
-    return pymol::Error("loading mmCIF with multiplex=1 not supported, please "
+    return pymol::make_error("loading mmCIF with multiplex=1 not supported, please "
                         "use 'split_states' after loading the object.");
   }
 
@@ -3362,12 +3362,12 @@ pymol::Result<ObjectMolecule*> ObjectMoleculeReadBCif(PyMOLGlobals* G,
 #endif
 
   if (I) {
-    return pymol::Error("loading BCIF into existing object not supported, "
+    return pymol::make_error("loading BCIF into existing object not supported, "
                         "please use 'create' to append to an existing object.");
   }
 
   if (multiplex > 0) {
-    return pymol::Error("loading BCIF with multiplex=1 not supported, please "
+    return pymol::make_error("loading BCIF with multiplex=1 not supported, please "
                         "use 'split_states' after loading the object.");
   }
 

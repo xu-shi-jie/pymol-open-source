@@ -46,6 +46,7 @@ Z* -------------------------------------------------------------------
 #include"Executive.h"
 #include"Field.h"
 #include "Feedback.h"
+#include "Util2.h"
 
 #define n_space_group_numbers 231
 static const char * space_group_numbers[] = {
@@ -4865,7 +4866,7 @@ static pymol::Result<std::unique_ptr<ObjectMapState>> ObjectMapDXStrToMap(
     PyMOLGlobals* G, const char* DXStr, int bytes, bool quiet)
 {
   if (DXStr[0] == '\x1f' && DXStr[1] == '\x8b') {
-    return pymol::Error("gzipped data not supported");
+    return pymol::make_error("gzipped data not supported");
   }
 
   enum {
@@ -4920,7 +4921,7 @@ static pymol::Result<std::unique_ptr<ObjectMapState>> ObjectMapDXStrToMap(
   }
 
   if (stage != 1) {
-    return pymol::Error("missing 'object 1 class gridpositions count' line");
+    return pymol::make_error("missing 'object 1 class gridpositions count' line");
   }
 
   {
@@ -4952,7 +4953,7 @@ static pymol::Result<std::unique_ptr<ObjectMapState>> ObjectMapDXStrToMap(
   }
 
   if (stage != 2) {
-    return pymol::Error("missing 'origin'");
+    return pymol::make_error("missing 'origin'");
   }
 
   {
@@ -4982,7 +4983,7 @@ static pymol::Result<std::unique_ptr<ObjectMapState>> ObjectMapDXStrToMap(
           delta + delta_i,
           delta + delta_i + 1,
           delta + delta_i + 2)) {
-      return pymol::Error("expected 3 floats");
+      return pymol::make_error("expected 3 floats");
     }
 
     p = ParseNextLine(p);
@@ -5011,7 +5012,7 @@ static pymol::Result<std::unique_ptr<ObjectMapState>> ObjectMapDXStrToMap(
   }
 
   if (stage != 3) {
-    return pymol::Error("missing 'delta'");
+    return pymol::make_error("missing 'delta'");
   }
 
   {
@@ -5039,7 +5040,7 @@ static pymol::Result<std::unique_ptr<ObjectMapState>> ObjectMapDXStrToMap(
           } else if (strcmp(cc_type, "float") == 0) {
             data_type = BINARY_FLOAT;
           } else {
-            return pymol::Error(
+            return pymol::make_error(
                 pymol::string_format("type '%s' not supported", cc_type));
           }
         }
@@ -5053,7 +5054,7 @@ static pymol::Result<std::unique_ptr<ObjectMapState>> ObjectMapDXStrToMap(
   }
 
   if (stage != 4) {
-    return pymol::Error("missing 'object . class array'");
+    return pymol::make_error("missing 'object . class array'");
   }
 
   PRINTFB(G, FB_ObjectMap, FB_Details)

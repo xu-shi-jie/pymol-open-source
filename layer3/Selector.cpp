@@ -56,6 +56,7 @@ Z* -------------------------------------------------------------------
 
 #include "P.h"
 #include"ListMacros.h"
+#include "Util2.h"
 
 #ifdef _PYMOL_IP_PROPERTIES
 #endif
@@ -3897,7 +3898,7 @@ pymol::Result<std::pair<ObjectMolecule*, int>> SelectorGetSingleAtomObjectIndex(
       int s = (ai++)->selEntry;
       if(SelectorIsMember(G, s, sele)) {
         if(found_it) {
-          return pymol::Error("More than one atom found");         /* ADD'L EXIT POINT */
+          return pymol::make_error("More than one atom found");         /* ADD'L EXIT POINT */
         } else {
           result = std::make_pair(obj, a);
           found_it = true;
@@ -3908,7 +3909,7 @@ pymol::Result<std::pair<ObjectMolecule*, int>> SelectorGetSingleAtomObjectIndex(
   if(found_it) {
     return result;
   } else {
-    return pymol::Error("Not found");
+    return pymol::make_error("Not found");
   }
 }
 
@@ -3925,7 +3926,7 @@ pymol::Result<std::array<float, 3>> SelectorGetSingleAtomVertex(PyMOLGlobals * G
     if(found_it) {
       return v;
     } else {
-      return pymol::Error("Invalid Atom");
+      return pymol::make_error("Invalid Atom");
     }
   }
 }
@@ -5702,7 +5703,7 @@ PyObject *SelectorGetCoordsAsNumPy(PyMOLGlobals * G, int sele, int state)
 pymol::Result<> SelectorLoadCoords(PyMOLGlobals * G, PyObject * coords, int sele, int state)
 {
 #ifdef _PYMOL_NOPY
-  return pymol::Error("Python unavailable.");
+  return pymol::make_error("Python unavailable.");
 #else
 
   double matrix[16];
@@ -5716,7 +5717,7 @@ pymol::Result<> SelectorLoadCoords(PyMOLGlobals * G, PyObject * coords, int sele
   void * ptr;
 
   if(!PySequence_Check(coords)) {
-    return pymol::Error("Passed argument is not a sequence");
+    return pymol::make_error("Passed argument is not a sequence");
   }
 
   // atom count in selection
@@ -5725,7 +5726,7 @@ pymol::Result<> SelectorLoadCoords(PyMOLGlobals * G, PyObject * coords, int sele
 
   // sequence length must match atom count
   if(nAtom != PySequence_Size(coords)) {
-    return pymol::Error("Atom count mismatch");
+    return pymol::make_error("Atom count mismatch");
   }
 
   // detect numpy arrays, allows faster data access (see below)
@@ -5735,7 +5736,7 @@ pymol::Result<> SelectorLoadCoords(PyMOLGlobals * G, PyObject * coords, int sele
   if(PyArray_Check(coords)) {
     if(PyArray_NDIM((PyArrayObject *)coords) != 2 ||
         PyArray_DIM((PyArrayObject *)coords, 1) != 3) {
-      return pymol::Error("Numpy array shape mismatch");
+      return pymol::make_error("Numpy array shape mismatch");
     }
     itemsize = PyArray_ITEMSIZE((PyArrayObject *)coords);
     switch(itemsize) {
@@ -5784,7 +5785,7 @@ pymol::Result<> SelectorLoadCoords(PyMOLGlobals * G, PyObject * coords, int sele
     }
 
     if(PyErr_Occurred()) {
-      return pymol::Error("Load Coords error occurred.");
+      return pymol::make_error("Load Coords error occurred.");
     }
 
 
@@ -9978,15 +9979,15 @@ pymol::Result<sele_array_t> SelectorEvaluate(PyMOLGlobals* G,
   }
 
   if (!ok) {
-    return pymol::Error(indicate_last_token(word, c));
+    return pymol::make_error(indicate_last_token(word, c));
   }
 
   if (depth != 1) {
-    return pymol::Error("Malformed selection.");
+    return pymol::make_error("Malformed selection.");
   }
 
   if (Stack[depth].type != STYP_LIST) {
-    return pymol::Error("Invalid selection.");
+    return pymol::make_error("Invalid selection.");
   }
 
   return std::move(Stack[totDepth].sele); /* return the selection list */

@@ -62,6 +62,7 @@ Z* -------------------------------------------------------------------
 #include "ShaderMgr.h"
 #include "Feedback.h"
 #include "GFXManager.h"
+#include "Util2.h"
 
 #ifdef _PYMOL_OPENVR
 #include"OpenVRMode.h"
@@ -1354,7 +1355,7 @@ pymol::Result<> SceneClipFromMode(PyMOLGlobals* G, pymol::zstring_view mode, flo
 {
   auto plane = SceneClipGetEnum(mode);
   if (plane == SceneClipMode::Invalid) {
-    return pymol::Error("invalid clip mode");
+    return pymol::make_error("invalid clip mode");
   }
   SceneClip(G, plane, movement, sele.c_str(), state);
   return {};

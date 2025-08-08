@@ -38,6 +38,7 @@ Z* -------------------------------------------------------------------
 #include "Selector.h"
 #include "Setting.h"
 #include "Util.h"
+#include "Util2.h"
 #include "Vector.h"
 #include "main.h"
 
@@ -621,7 +622,7 @@ pymol::Result<> EditorInvert(PyMOLGlobals* G, int quiet)
   ObjectMolecule *obj0, *obj1, *obj2;
 
   if (!EditorActive(G)) {
-    return pymol::Error("Must pick an atom to invert");
+    return pymol::make_error("Must pick an atom to invert");
   } else {
     sele0 = SelectorIndexByName(G, cEditorSele1);
     sele1 = SelectorIndexByName(G, cEditorSele2);
@@ -630,13 +631,13 @@ pymol::Result<> EditorInvert(PyMOLGlobals* G, int quiet)
     obj1 = SelectorGetFastSingleAtomObjectIndex(G, sele1, &ia0);
     obj2 = SelectorGetFastSingleAtomObjectIndex(G, sele2, &ia1);
     if (sele0 < 0) {
-      return pymol::Error("Must pick atom to invert as pk1");
+      return pymol::make_error("Must pick atom to invert as pk1");
     } else if (sele1 < 0) {
-      return pymol::Error("Must pick immobile atom in pk2");
+      return pymol::make_error("Must pick immobile atom in pk2");
     } else if (sele2 < 0) {
-      return pymol::Error("Must pick immobile atom in pk3");
+      return pymol::make_error("Must pick immobile atom in pk3");
     } else if (!(obj0 && (obj0 == obj1) && (obj0 = obj2))) {
-      return pymol::Error("Must pick three atoms in the same object");
+      return pymol::make_error("Must pick three atoms in the same object");
     } else {
       state = SceneGetState(G);
       ObjectMoleculeSaveUndo(obj0, state, false);
@@ -673,7 +674,7 @@ pymol::Result<> EditorInvert(PyMOLGlobals* G, int quiet)
             " Editor: Inverted atom.\n" ENDFB(G);
           }
         } else {
-          return pymol::Error("No free fragments found for inversion");
+          return pymol::make_error("No free fragments found for inversion");
         }
 
         SceneInvalidate(G);
@@ -715,7 +716,7 @@ pymol::Result<> EditorTorsion(PyMOLGlobals* G, float angle)
       sele2 = SelectorIndexByName(G, sele);
       obj2 = SelectorGetFastSingleObjectMolecule(G, sele2);
       if (!((sele0 >= 0) && (sele1 >= 0) && (sele2 >= 0) && (obj0 == obj1))) {
-        return pymol::Error("Must specify a bond first.");
+        return pymol::make_error("Must specify a bond first.");
       } else {
         if ((i0 >= 0) && (i1 >= 0)) {
           state = SceneGetState(G);
@@ -758,7 +759,7 @@ pymol::Result<> EditorTorsion(PyMOLGlobals* G, float angle)
   if (ok) {
     return {};
   } else {
-    return pymol::Error("Error occurred.");
+    return pymol::make_error("Error occurred.");
   }
 }
 
@@ -850,7 +851,7 @@ pymol::Result<> EditorSelect(PyMOLGlobals* G, const char* str0,
   } else {
     EditorInactivate(G);
     if (s0 && s0[0]) {
-      return pymol::Error("Invalid input selection(s)");
+      return pymol::make_error("Invalid input selection(s)");
     }
   }
   return {};
@@ -1077,10 +1078,10 @@ pymol::Result<> EditorHFill(PyMOLGlobals* G, int quiet)
         }
       }
     } else {
-      return pymol::Error("Nothing picked.");
+      return pymol::make_error("Nothing picked.");
     }
   } else {
-    return pymol::Error("Editor not active.");
+    return pymol::make_error("Editor not active.");
   }
   return {};
 }
@@ -1106,7 +1107,7 @@ pymol::Result<> EditorHFix(PyMOLGlobals* G, const char* sele, int quiet)
         ExecutiveFixHydrogens(G, cEditorSele2, quiet);
       }
     } else {
-      return pymol::Error("No valid selection and active editor.");
+      return pymol::make_error("No valid selection and active editor.");
     }
   } else {
     ExecutiveFixHydrogens(G, sele, quiet);

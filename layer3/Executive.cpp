@@ -138,7 +138,7 @@
   p_return_if_error(tmpsele);                                                  \
   SelectorID_t seleID = tmpsele->getIndex();                                   \
   if (seleID < 0) {                                                            \
-    return pymol::Error("This should not happen - PyMOL may have a bug");      \
+    return pymol::make_error("This should not happen - PyMOL may have a bug"); \
   }                                                                            \
   assert(seleID != cSelectionInvalid)
 
@@ -163,7 +163,7 @@
     sele##N = (tmpsele##N)->getIndex();                                        \
   }                                                                            \
   if (sele##N == cSelectionInvalid) {                                          \
-    return pymol::Error("Invalid selection " #N);                              \
+    return pymol::make_error("Invalid selection " #N);                              \
   }
 
 /* routines that still need to be updated for Tracker list iteration
@@ -3510,13 +3510,13 @@ pymol::Result<std::array<float, 3>> ExecutiveGetAtomVertex(
 
   switch (tmpsele1->getAtomCount()) {
   case 0:
-    return pymol::Error("Empty Selection");
+    return pymol::make_error("Empty Selection");
   case 1:
     return SelectorGetSingleAtomVertex(G, tmpsele1->getIndex(), state);
   }
 
   assert(tmpsele1->getAtomCount() > 0);
-  return pymol::Error("More than one atom found");
+  return pymol::make_error("More than one atom found");
 }
 
 void ExecutiveMakeUnusedName(PyMOLGlobals* G, char* prefix, int length,
@@ -3747,7 +3747,7 @@ pymol::Result<ExecutiveLoadArgs> ExecutiveLoadPrepareArgs(PyMOLGlobals* G,
   case cLoadTypeDXStr:
   case cLoadTypeBCIFStr:
     if (!content) {
-      return pymol::Error("content is nullptr");
+      return pymol::make_error("content is nullptr");
     }
     fname_null_ok = true;
     break;
@@ -3783,7 +3783,7 @@ pymol::Result<ExecutiveLoadArgs> ExecutiveLoadPrepareArgs(PyMOLGlobals* G,
       PRINTFB(G, FB_Executive, FB_Blather)
       " %s: Loading from %s.\n", __func__, fname.c_str() ENDFB(G);
     } catch (...) {
-      return pymol::Error(
+      return pymol::make_error(
           pymol::string_format("Unable to open file '%s'", fname.c_str()));
     }
 
@@ -3837,7 +3837,7 @@ pymol::Result<ExecutiveLoadArgs> ExecutiveLoadPrepareArgs(PyMOLGlobals* G,
   }
 
   if (fname.empty() && !fname_null_ok) {
-    return pymol::Error("This format requires a filename to load");
+    return pymol::make_error("This format requires a filename to load");
   }
 
   if (!args.plugin.empty()) {
@@ -3969,7 +3969,7 @@ pymol::Result<> ExecutiveLoad(PyMOLGlobals* G, ExecutiveLoadArgs const& args)
       ObjectMoleculeLoadTRJFile(G, (ObjectMolecule*) origObj, fname, state, 1,
           1, 1, -1, -1, nullptr, 1, nullptr, quiet);
     } else {
-      return pymol::Error(
+      return pymol::make_error(
           "must load object topology before loading trajectory!");
     }
     break;
@@ -3978,7 +3978,7 @@ pymol::Result<> ExecutiveLoad(PyMOLGlobals* G, ExecutiveLoadArgs const& args)
       ObjectMoleculeLoadRSTFile(
           G, (ObjectMolecule*) origObj, fname, state, quiet, 1);
     } else {
-      return pymol::Error(
+      return pymol::make_error(
           "must load object topology before loading coordinate file!");
     }
     break;
@@ -3987,12 +3987,12 @@ pymol::Result<> ExecutiveLoad(PyMOLGlobals* G, ExecutiveLoadArgs const& args)
       ObjectMoleculeLoadRSTFile(
           G, (ObjectMolecule*) origObj, fname, state, quiet, 0);
     } else {
-      return pymol::Error(
+      return pymol::make_error(
           "must load object topology before loading restart file!");
     }
     break;
   case cLoadTypePMO:
-    return pymol::Error("PMO format no longer supported.");
+    return pymol::make_error("PMO format no longer supported.");
   case cLoadTypeDXStr:
     obj = ObjectMapReadDXStr(
         G, dynamic_cast<ObjectMap*>(origObj), content, size, state, quiet);
@@ -6131,7 +6131,7 @@ pymol::Result<> ExecutiveSetSymmetry(PyMOLGlobals* G, const char* sele,
   symmetry.setSpaceGroup(sgroup);
 
   if (!ExecutiveSetSymmetry(G, sele, state, symmetry, quiet)) {
-    return pymol::Error("no object selected");
+    return pymol::make_error("no object selected");
   }
 
   return {};
@@ -6146,18 +6146,18 @@ pymol::Result<> ExecutiveSymmetryCopy(PyMOLGlobals* G, const char* source_name,
 
   auto const* source_obj = ExecutiveFindObjectByName(G, source_name);
   if (!source_obj) {
-    return pymol::Error("source object not found");
+    return pymol::make_error("source object not found");
   }
 
   auto const* source_symm = source_obj->getSymmetry(source_state);
   if (!source_symm) {
-    return pymol::Error(pymol::string_format(
+    return pymol::make_error(pymol::string_format(
         "no symmetry in object '%s' state %d", source_name, source_state));
   }
 
   if (!ExecutiveSetSymmetry(
           G, target_name, target_state, *source_symm, quiet)) {
-    return pymol::Error("target object not found");
+    return pymol::make_error("target object not found");
   }
 
   return {};
@@ -6234,7 +6234,7 @@ pymol::Result<> ExecutiveSmooth(PyMOLGlobals* G, const char* selection,
 
   auto const window_abs = std::abs(window);
   if (window_abs < 2) {
-    return pymol::Error("window must be at least size 2");
+    return pymol::make_error("window must be at least size 2");
   }
 
   if (n_state < window_abs) {
@@ -8768,17 +8768,17 @@ pymol::Result<float> ExecutiveGetArea(
   auto obj0 = SelectorGetSingleObjectMolecule(G, sele0);
   if (!obj0) {
     if (SelectorCountAtoms(G, sele0, state) > 0)
-      return pymol::Error("Selection must be within a single object");
+      return pymol::make_error("Selection must be within a single object");
     return 0.f;
   }
 
   auto cs = obj0->getCoordSet(state);
   if (!cs)
-    return pymol::Error("Invalid state");
+    return pymol::make_error("Invalid state");
 
   auto rep = (RepDot*) RepDotDoNew(cs, cRepDotAreaType, state);
   if (!rep)
-    return pymol::Error("Can't get dot representation.");
+    return pymol::make_error("Can't get dot representation.");
 
   if (load_b) {
     /* zero out B-values within selection */
@@ -8941,7 +8941,7 @@ pymol::Result<char const*> ExecutiveGetType(PyMOLGlobals* G, const char* name)
   auto rec = ExecutiveFindSpec(G, name);
 
   if (!rec) {
-    return pymol::Error("object not found");
+    return pymol::make_error("object not found");
   }
 
   if (rec->type == cExecSelection) {
@@ -10287,7 +10287,7 @@ pymol::Result<int> ExecutiveSelectList(PyMOLGlobals* G, const char* sele_name,
 
   auto obj = ExecutiveFindObject<ObjectMolecule>(G, oname);
   if (!obj) {
-    return pymol::Error("object not found");
+    return pymol::make_error("object not found");
   }
 
   std::vector<int> idx_list;
@@ -10313,7 +10313,7 @@ pymol::Result<int> ExecutiveSelectList(PyMOLGlobals* G, const char* sele_name,
       }
     }
   } else {
-    return pymol::Error("invalid mode");
+    return pymol::make_error("invalid mode");
   }
 
   return SelectorCreateOrderedFromObjectIndices(
@@ -12710,7 +12710,7 @@ pymol::Result<> ExecutiveColor(
   if ((!name) || (!name[0]))
     name = cKeywordAll;
   if (col_ind == -1) {
-    return pymol::Error("Unknown color.");
+    return pymol::make_error("Unknown color.");
   } else {
     CTracker* I_Tracker = I->Tracker;
     SpecRec* rec = nullptr;

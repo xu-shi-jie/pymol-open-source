@@ -47,6 +47,7 @@ Z* -------------------------------------------------------------------
 #include "MolV3000.h"
 #include "HydrogenAdder.h"
 #include "Feedback.h"
+#include "Util2.h"
 
 #ifdef _WEBGL
 #endif
@@ -3219,7 +3220,7 @@ pymol::Result<> ObjectMoleculeFuse(ObjectMolecule* I, int const index0,
 
   auto const* scs = src->getCoordSet(state1);
   if (!scs) {
-    return pymol::Error("no source coordset");
+    return pymol::make_error("no source coordset");
   }
 
   auto* ai0 = I->AtomInfo.data();
@@ -3249,7 +3250,7 @@ pymol::Result<> ObjectMoleculeFuse(ObjectMolecule* I, int const index0,
 
   auto const anch1 = scs->atmToIdx(at1);
   if (anch1 < 0) {
-    return pymol::Error("no coordinate for source anchor atom");
+    return pymol::make_error("no coordinate for source anchor atom");
   }
 
   /* copy atoms and atom info into a 1:1 direct mapping */
@@ -3304,7 +3305,7 @@ pymol::Result<> ObjectMoleculeFuse(ObjectMolecule* I, int const index0,
     if (at1 != index1) {
       auto const hydr1 = scs->atmToIdx(index1);
       if (hydr1 == -1) {
-        return pymol::Error("no source attachment vector found");
+        return pymol::make_error("no source attachment vector found");
       }
       nai[hydr1].deleteFlag = true;
       const float* vh1 = scs->coordPtr(hydr1);
@@ -3312,7 +3313,7 @@ pymol::Result<> ObjectMoleculeFuse(ObjectMolecule* I, int const index0,
     } else {
       auto found = CoordSetFindOpenValenceVector(scs, at1, mat1_inv);
       if (!found) {
-        return pymol::Error("no source attachment vector found");
+        return pymol::make_error("no source attachment vector found");
       }
       scale3f(mat1_inv, -1.0F, mat1_inv);
     }
@@ -3372,7 +3373,7 @@ pymol::Result<> ObjectMoleculeFuse(ObjectMolecule* I, int const index0,
     }
 
     if (!found_any_target_vector) {
-      return pymol::Error("no target attachment vector found");
+      return pymol::make_error("no target attachment vector found");
     }
   }
 
