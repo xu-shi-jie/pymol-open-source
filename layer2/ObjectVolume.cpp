@@ -873,6 +873,8 @@ void ObjectVolume::render(RenderInfo* info)
       // Create a 3D texture
       vs->textures[0] = tex3dGenBind(G, volume_bit_depth);
       auto t0 = G->ShaderMgr->getGPUBuffer<TextureGL>(vs->textures[0]);
+      // Ensure that unpack alignment is set to 1
+      glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
       t0->texture_data_3D(
           field->dim[2], field->dim[1], field->dim[0], field->data.data());
 
