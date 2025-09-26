@@ -22,6 +22,13 @@ public:
   {
   }
 
+  template <typename RangeT>
+  span(const RangeT& range)
+      : data_(range.data())
+      , size_(range.size())
+  {
+  }
+
   T& operator[](std::size_t index) { return data_[index]; }
 
   std::size_t size() const { return size_; }

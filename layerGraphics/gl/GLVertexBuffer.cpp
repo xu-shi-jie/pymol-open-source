@@ -4,6 +4,8 @@
 
 #include "pymol/algorithm.h"
 
+#include <cstring>
+
 static bool GLGenBuffer(GLuint& id, GLuint bufferType, pymol::span<const std::byte> data)
 {
   glGenBuffers(1, &id);
@@ -278,7 +280,7 @@ bool VertexBufferGL::bufferData(
 
 void VertexBufferGL::bufferSubData(size_t offset, size_t size, void* data, size_t index)
 {
-  assert("Invalid Desc index" && index < m_desc.size());
+  assert("Invalid Desc index" && index < m_desc.descs.size());
   assert("Invalid GLDesc index" && index < desc_glIDs.size());
   auto glID = isInterleaved() ? m_interleavedID : desc_glIDs[index];
   glBindBuffer(bufferType(), glID);

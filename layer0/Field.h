@@ -21,6 +21,7 @@ Z* -------------------------------------------------------------------
 #include"os_python.h"
 #include"PyMOLGlobals.h"
 
+#include <algorithm>
 #include <cassert>
 #include <vector>
 
