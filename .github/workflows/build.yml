@@ -80,7 +80,7 @@ jobs:
     - name: Set up Miniforge
       run: |
         conda init powershell
-        conda create --name $env:CONDA_ENV_NAME -c conda-forge -c schrodinger `
+        conda create --name $env:CONDA_ENV_NAME -c conda-forge -c schrodinger --override-channels `
             python=${{ matrix.python-version }} `
             pip `
             catch2=2.13.3 `
@@ -89,7 +89,7 @@ jobs:
             glew `
             glm `
             libpng `
-            libxml2 `
+            libxml2-devel `
             libnetcdf `
 
     - name: Get additional sources
@@ -139,7 +139,7 @@ jobs:
 
     - name: Set up Miniforge
       run: |
-        conda create --name $CONDA_ENV_NAME -c conda-forge -c schrodinger \
+        conda create --name $CONDA_ENV_NAME -c conda-forge -c schrodinger --override-channels \
             python=${{ matrix.python-version }} \
             pip \
             catch2=2.13.3 \
@@ -148,7 +148,7 @@ jobs:
             glew \
             glm \
             libpng \
-            libxml2 \
+            libxml2-devel \
             libnetcdf
 
     - name: Get additional sources
