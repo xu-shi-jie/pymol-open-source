@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include "GPUEnums.h"
 #include "VertexFormat.h"
 
