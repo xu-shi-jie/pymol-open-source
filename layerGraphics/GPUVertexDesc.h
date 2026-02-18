@@ -5,6 +5,7 @@
 #include "VertexFormat.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 // #include <span>
 #include "pymol/span.h"

@@ -692,13 +692,18 @@ static WordKeyValue Keyword[] = {
 #define SCMP_LTHN 0x02
 #define SCMP_RANG 0x03
 #define SCMP_EQAL 0x04
+#define SCMP_GEQL 0x05
+#define SCMP_LEQL 0x06
 
 static WordKeyValue AtOper[] = {
   {">", SCMP_GTHN},
   {"<", SCMP_LTHN},
   {"in", SCMP_RANG},
   {"=", SCMP_EQAL},
-  {"", 0}
+  {"==", SCMP_EQAL},
+  {">=", SCMP_GEQL},
+  {"<=", SCMP_LEQL},
+  {"", 0},
 };
 
 static short fcmp(float a, float b, int oper) {
@@ -709,6 +714,10 @@ static short fcmp(float a, float b, int oper) {
     return (a < b);
   case SCMP_EQAL:
     return fabs(a - b) < R_SMALL4;
+  case SCMP_GEQL:
+    return (a >= b);
+  case SCMP_LEQL:
+    return (a <= b);
   }
   printf("ERROR: invalid operator %d\n", oper);
   return false;
@@ -8443,230 +8452,117 @@ static int SelectorSelect2(PyMOLGlobals * G, EvalElem * base, int state)
   base->sele_calloc(I->Table.size());
   base->sele_err_chk_ptr(G);
   switch (base->code) {
-  case SELE_XVLx:
-  case SELE_YVLx:
-  case SELE_ZVLx:
-    oper = WordKey(G, AtOper, base[1].text(), 4, ignore_case, &exact);
-    switch (oper) {
-    case SCMP_GTHN:
-    case SCMP_LTHN:
-    case SCMP_EQAL:
-      if(sscanf(base[2].text(), "%f", &comp1) != 1)
-        ok = ErrMessage(G, "Selector", "Invalid Number");
-      break;
-    default:
-      ok = ErrMessage(G, "Selector", "Invalid Operator.");
-      break;
-    }
-    if(ok) {
-      ObjectMolecule *obj;
-      CoordSet *cs;
-      int at, idx, s, s0 = 0, sN = I->NCSet;
-
-      if (state != cStateAll) {
-        s0 = (state < cStateAll) ? SceneGetState(G) : state;
-        sN = s0 + 1;
-      }
-
-      for(a = cNDummyAtoms; a < I->Table.size(); a++)
-        base[0].sele[a] = false;
-
-      for(s = s0; s < sN; s++) {
-        for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-          if(base[0].sele[a])
-            continue;
-
-          obj = I->Obj[I->Table[a].model];
-          if(s >= obj->NCSet)
-            continue;
-
-          at = I->Table[a].atom;
-          cs = obj->CSet[s];
-          idx = cs->atmToIdx(at);
-          if(idx < 0)
-            continue;
-
-          idx *= 3;
-          switch (base->code) {
-          case SELE_ZVLx:
-            idx++;
-          case SELE_YVLx:
-            idx++;
-          }
-
-          base[0].sele[a] = fcmp(cs->Coord[idx], comp1, oper);
-        }
-      }
-    }
-    break;
-  case SELE_PCHx:
-  case SELE_FCHx:
-  case SELE_BVLx:
-  case SELE_QVLx:
-    oper = WordKey(G, AtOper, base[1].text(), 4, ignore_case, &exact);
-    if(!oper)
-      ok = ErrMessage(G, "Selector", "Invalid Operator.");
-    if(ok) {
+    case SELE_XVLx:
+    case SELE_YVLx:
+    case SELE_ZVLx:
+      oper = WordKey(G, AtOper, base[1].text(), 4, ignore_case, &exact);
       switch (oper) {
       case SCMP_GTHN:
       case SCMP_LTHN:
       case SCMP_EQAL:
+      case SCMP_GEQL:
+      case SCMP_LEQL:
         if(sscanf(base[2].text(), "%f", &comp1) != 1)
           ok = ErrMessage(G, "Selector", "Invalid Number");
         break;
-      }
-      if(ok) {
-        switch (oper) {
-        case SCMP_GTHN:
-          switch (base->code) {
-          case SELE_BVLx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(at1->b > comp1) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_QVLx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(at1->q > comp1) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_PCHx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(at1->partialCharge > comp1) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_FCHx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(at1->formalCharge > comp1) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          }
-          break;
-        case SCMP_LTHN:
-          switch (base->code) {
-          case SELE_BVLx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(at1->b < comp1) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_QVLx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(at1->q < comp1) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_PCHx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(at1->partialCharge < comp1) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_FCHx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(at1->formalCharge < comp1) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          }
-          break;
-        case SCMP_EQAL:
-          switch (base->code) {
-          case SELE_BVLx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(fabs(at1->b - comp1) < R_SMALL4) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_QVLx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(fabs(at1->q - comp1) < R_SMALL4) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_PCHx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(fabs(at1->partialCharge - comp1) < R_SMALL4) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_FCHx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(fabs(at1->formalCharge - comp1) < R_SMALL4) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          }
-          break;
-        }
+      default:
+        ok = ErrMessage(G, "Selector", "Invalid Operator.");
         break;
       }
-    }
-  }
 
+      if(ok) {
+        ObjectMolecule *obj;
+        CoordSet *cs;
+        int at, idx, s, s0 = 0, sN = I->NCSet;
+
+        if (state != cStateAll) {
+          s0 = (state < cStateAll) ? SceneGetState(G) : state;
+          sN = s0 + 1;
+        }
+
+        for(s = s0; s < sN; s++) {
+          for(a = cNDummyAtoms; a < I->Table.size(); a++) {
+            if(base[0].sele[a])
+              continue;
+
+            obj = I->Obj[I->Table[a].model];
+            if(s >= obj->NCSet)
+              continue;
+
+            at = I->Table[a].atom;
+            cs = obj->CSet[s];
+            idx = cs->atmToIdx(at);
+            if(idx < 0)
+              continue;
+
+            idx *= 3;
+            switch (base->code) {
+            case SELE_ZVLx:
+              idx++;
+            case SELE_YVLx:
+              idx++;
+            case SELE_XVLx:
+              break;
+            }
+
+            if (fcmp(cs->Coord[idx], comp1, oper)) {
+              base[0].sele[a] = true;
+            } else {
+              base[0].sele[a] = false;
+            }
+          }
+        }
+      }
+      break;
+    case SELE_PCHx:
+    case SELE_FCHx:
+    case SELE_BVLx:
+    case SELE_QVLx:
+      oper = WordKey(G, AtOper, base[1].text(), 4, ignore_case, &exact);
+      if(!oper) {
+        ok = ErrMessage(G, "Selector", "Invalid Operator.");
+        break;
+      }
+      switch (oper) {
+      case SCMP_GTHN:
+      case SCMP_LTHN:
+      case SCMP_EQAL:
+      case SCMP_GEQL:
+      case SCMP_LEQL:
+        if(sscanf(base[2].text(), "%f", &comp1) != 1)
+          ok = ErrMessage(G, "Selector", "Invalid Number");
+        break;
+      default:
+        ok = ErrMessage(G, "Selector", "Invalid Operator.");
+        break;
+      }
+    
+      if(ok) {
+        for(a = cNDummyAtoms; a < I->Table.size(); a++) {
+          at1 = I->Obj[I->Table[a].model]->AtomInfo + I->Table[a].atom;
+          float atomValue;
+          switch (base->code) {
+            case SELE_BVLx: atomValue = at1->b;          break;
+            case SELE_PCHx: atomValue = at1->partialCharge; break;
+            case SELE_FCHx: atomValue = at1->formalCharge;  break;
+            case SELE_QVLx: atomValue = at1->q;          break;
+            default: {
+              ErrMessage(G, "Selector", "Invalid Operand.");
+              return false;
+            }
+          }
+          
+          if(fcmp(atomValue, comp1, oper)) {
+            base[0].sele[a] = true;
+            c++;
+          } else {
+            base[0].sele[a] = false;
+          }
+        }
+      }
+      break;
+    }
+  
   PRINTFD(G, FB_Selector)
     " %s: %d atoms selected.\n", __func__, c ENDFD;
   return (ok);
@@ -10032,11 +9928,20 @@ std::vector<std::string> SelectorParse(PyMOLGlobals * G, const char *s)
         case '|':
         case '(':
         case ')':
+        case '%':
+          r.emplace_back(1, *p); /* add new word */
+          q = &r.back();
+          w_flag = false;
+          break;
         case '>':
         case '<':
         case '=':
-        case '%':
-          r.emplace_back(1, *p); /* add new word */
+          if (*(p+1) == '=') { /* handle >=, <=, == */
+            r.emplace_back(p, 2);
+            p++;
+          } else  {
+            r.emplace_back(1, *p);
+          }
           q = &r.back();
           w_flag = false;
           break;
@@ -10056,13 +9961,22 @@ std::vector<std::string> SelectorParse(PyMOLGlobals * G, const char *s)
       case '|':
       case '(':
       case ')':
-      case '>':
-      case '<':
-      case '=':
       case '%':
         r.emplace_back(1, *p); /* add new word */
         q = &r.back();
         break;
+      case '>':
+      case '<':
+      case '=':
+        if (*(p+1) == '=') { /* handle >=, <=, == */
+            r.emplace_back(p, 2);
+            p++;
+          } else  {
+            r.emplace_back(1, *p);
+          }
+          q = &r.back();
+          w_flag = false;
+          break;
       case ' ':
         break;
       case '"':
